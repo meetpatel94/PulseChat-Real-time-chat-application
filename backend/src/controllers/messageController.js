@@ -92,4 +92,22 @@ async function deleteMessage(req, res, next) {
   }
 }
 
-module.exports = { getMessages, createMessage, deleteMessage };
+/**
+ * DELETE /api/messages
+ * Clears the entire chat, then broadcasts `chat_cleared` so every
+ * connected client empties its message list in real time.
+ */
+async function clearMessages(req, res, next) {
+  try {
+    await Message.deleteMany({});
+
+    const io = req.app.get("io");
+    if (io) io.emit("chat_cleared", {});
+
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getMessages, createMessage, deleteMessage, clearMessages };

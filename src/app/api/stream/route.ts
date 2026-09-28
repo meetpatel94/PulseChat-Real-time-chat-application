@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 /**
  * Server-sent-events stream for the sandbox demo.
  * The client opens one stream per browser tab and receives
- * { event, data } frames: "message", "online_users" and "typing".
+ * { event, data } frames: "message", "online_users", "typing" and
+ * "chat_cleared".
  */
 export async function GET(req: NextRequest) {
   const username = (req.nextUrl.searchParams.get("username") ?? "").trim();

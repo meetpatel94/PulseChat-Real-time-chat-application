@@ -93,3 +93,27 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+/**
+ * DELETE /api/messages — clear the entire chat for every connected client.
+ * Body (optional): { username } — who triggered the clear, for the notice.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => null);
+    const rawBy =
+      typeof body?.username === "string" ? body.username.trim() : "";
+    const by = rawBy ? rawBy.slice(0, MAX_USERNAME) : "Someone";
+
+    await db.delete(messages);
+
+    chatBus.emitToAll({ event: "chat_cleared", data: { by } });
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error("DELETE /api/messages failed:", err);
+    return Response.json(
+      { success: false, error: "Failed to clear chat" },
+      { status: 500 }
+    );
+  }
+}

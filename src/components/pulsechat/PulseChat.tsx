@@ -91,6 +91,28 @@ function LogoutIcon() {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
+
 function CheckIcon({ double }: { double: boolean }) {
   return double ? (
     <svg
@@ -140,6 +162,7 @@ export default function PulseChat() {
   const [conn, setConn] = useState<ConnectionState>("connecting");
   const [notice, setNotice] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const seenOnce = useRef(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,10 +238,15 @@ export default function PulseChat() {
           data:
             | ChatMessage
             | string[]
-            | { username: string; isTyping: boolean };
+            | { username: string; isTyping: boolean }
+            | { by: string };
         };
         if (parsed.event === "message") {
           upsertMessage(parsed.data as ChatMessage);
+        } else if (parsed.event === "chat_cleared") {
+          // Another user cleared the whole chat — empty this tab too.
+          setMessages([]);
+          setHistoryState("ready");
         } else if (parsed.event === "online_users") {
           setOnlineUsers(parsed.data as string[]);
         } else if (parsed.event === "typing") {
@@ -327,6 +355,39 @@ export default function PulseChat() {
       );
     } finally {
       setSending(false);
+    }
+  };
+
+  /**
+   * Clear every message in the chat (for all users) after confirmation.
+   * The DELETE call broadcasts `chat_cleared` so other tabs clear live.
+   */
+  const handleClearChat = async () => {
+    if (clearing) return;
+    const ok = window.confirm(
+      "Clear all messages for everyone? This cannot be undone."
+    );
+    if (!ok) return;
+    setClearing(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        error?: string;
+      } | null;
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error ?? "Failed to clear chat");
+      }
+      setMessages([]);
+      setHistoryState("ready");
+    } catch (err) {
+      showNotice(err instanceof Error ? err.message : "Failed to clear chat");
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -482,6 +543,18 @@ export default function PulseChat() {
             <span className="hidden max-w-[140px] truncate items-center rounded-full bg-[#edf4f1] px-3 py-1 text-xs font-semibold text-[#0b6e5f] sm:inline-flex">
               {username}
             </span>
+            <button
+              type="button"
+              onClick={handleClearChat}
+              disabled={clearing || messages.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#f0d3d3] px-3 py-1.5 text-xs font-semibold text-[#b91c1c] transition-colors hover:border-[#e5b4b4] hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+              title="Clear all messages for everyone"
+            >
+              <TrashIcon />
+              <span className="hidden sm:inline">
+                {clearing ? "Clearing…" : "Clear chat"}
+              </span>
+            </button>
             <button
               type="button"
               onClick={handleLogout}
