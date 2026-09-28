@@ -434,9 +434,39 @@ input {
   border-color: #c3cec7;
 }
 
+.clear-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #f0d3d3;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.clear-chat-btn:hover {
+  background: var(--red-bg);
+  border-color: #e5b4b4;
+}
+
+.clear-chat-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.clear-chat-btn:disabled:hover {
+  background: transparent;
+  border-color: #f0d3d3;
+}
+
 @media (max-width: 480px) {
   .user-chip,
-  .logout-label {
+  .logout-label,
+  .clear-chat-label {
     display: none;
   }
 }

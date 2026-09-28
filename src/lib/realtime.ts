@@ -3,7 +3,8 @@ import { EventEmitter } from "node:events";
 export type ChatEvent =
   | { event: "message"; data: unknown }
   | { event: "online_users"; data: string[] }
-  | { event: "typing"; data: { username: string; isTyping: boolean } };
+  | { event: "typing"; data: { username: string; isTyping: boolean } }
+  | { event: "chat_cleared"; data: { by: string } };
 
 type ChatListener = (event: ChatEvent) => void;
 

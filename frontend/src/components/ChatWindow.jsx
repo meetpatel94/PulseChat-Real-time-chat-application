@@ -14,6 +14,7 @@ export default function ChatWindow({
   notice,
   onRetryHistory,
   onSend,
+  onClear,
   onTyping,
   onTypingStop,
   onLogout,
@@ -25,6 +26,8 @@ export default function ChatWindow({
           username={username}
           onlineUsers={onlineUsers}
           connectionStatus={connectionStatus}
+          hasMessages={messages.length > 0}
+          onClearChat={onClear}
           onLogout={onLogout}
         />
 

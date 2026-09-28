@@ -15,6 +15,7 @@ A real-time chat application with instant messaging, live typing indicators, onl
 - **Online users** — avatar stack + live count, broadcast on every join/leave (supports multiple tabs per user).
 - **Connection status** — Connected / Connecting / Disconnected pill in the header, plus a non-intrusive banner when the link drops. Socket.io's built-in reconnection kicks in automatically and refetches missed messages on reconnect.
 - **Message status** — `sent` (single check) → `delivered` (double check) when at least one other user is online.
+- **Clear all chat** — a header button wipes the whole conversation for everyone, with a confirmation prompt; a `chat_cleared` broadcast empties every connected client instantly.
 - **Responsive UI** — desktop, tablet and mobile layouts in a single card-based view.
 - **Robust error handling** — validation on both ends, central Express error middleware, 404 handler, and friendly in-UI error/notice states.
 
@@ -192,6 +193,18 @@ Validation (400 responses):
 | `text` ≤ 1000 chars           | `"text must be at most 1000 characters"`   |
 | Malformed JSON body           | `"Invalid JSON body"`                      |
 
+### DELETE `/api/messages`
+
+Clears the **entire** chat (every message, for every user) and broadcasts `chat_cleared` to all connected sockets.
+
+```bash
+curl -X DELETE http://localhost:5000/api/messages
+```
+
+```json
+{ "success": true }
+```
+
 ### DELETE `/api/messages/:id` *(optional)*
 
 ```bash
@@ -220,6 +233,7 @@ Client connects with `io(SOCKET_URL, { auth: { username } })`.
 | ----------------- | -------------------------------- | -------------------------------------------------- |
 | `receive_message` | full saved message document      | Emits to **all** clients (sender included)         |
 | `online_users`    | `["Meet", "Rahul"]`              | Broadcast on connect/disconnect                    |
+| `chat_cleared`    | —                                | The whole chat was cleared — empty the message list |
 | `typing`          | `{ username }`                   | Someone else started typing                        |
 | `stop_typing`     | `{ username }`                   | Someone else stopped typing                        |
 | `message_error`   | `{ message }`                    | Validation/persistence failure for that socket     |

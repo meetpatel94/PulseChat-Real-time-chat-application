@@ -32,6 +32,14 @@ export async function deleteMessage(id) {
 }
 
 /**
+ * Clear the entire chat (all messages, for every user).
+ */
+export async function clearAllMessages() {
+  const { data } = await api.delete("/messages");
+  return data;
+}
+
+/**
  * Extract a human-readable message from any axios/network error.
  */
 export function getErrorMessage(err) {

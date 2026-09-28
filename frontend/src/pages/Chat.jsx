@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  clearAllMessages,
   fetchMessages,
   getErrorMessage,
   sendRestMessage,
@@ -73,6 +74,11 @@ export default function Chat({ username, onLogout }) {
     const onDisconnect = () => setConnectionStatus("disconnected");
     const onReconnect = () => loadHistory(); // pick up missed messages
     const onReceive = (msg) => upsertMessage(msg);
+    const onChatCleared = () => {
+      // Someone cleared the whole chat — empty this client too.
+      setMessages([]);
+      setHistoryState("ready");
+    };
     const onOnline = (users) =>
       setOnlineUsers(Array.isArray(users) && users.length > 0 ? users : [username]);
     const onTyping = ({ username: name } = {}) => {
@@ -96,6 +102,7 @@ export default function Chat({ username, onLogout }) {
     socket.on("disconnect", onDisconnect);
     socket.on("reconnect", onReconnect);
     socket.on("receive_message", onReceive);
+    socket.on("chat_cleared", onChatCleared);
     socket.on("online_users", onOnline);
     socket.on("typing", onTyping);
     socket.on("stop_typing", onStopTyping);
@@ -118,6 +125,7 @@ export default function Chat({ username, onLogout }) {
     return () => {
       clearInterval(typer);
       clearTimeout(noticeTimer.current);
+      socket.off("chat_cleared", onChatCleared);
       disconnectSocket();
     };
   }, [username, loadHistory, upsertMessage, showNotice]);
@@ -147,6 +155,27 @@ export default function Chat({ username, onLogout }) {
     [username, upsertMessage, showNotice]
   );
 
+  /**
+   * Clear every message in the chat (for all users) after confirmation.
+   * The DELETE call broadcasts `chat_cleared` so all clients empty live.
+   */
+  const handleClear = useCallback(async () => {
+    const ok = window.confirm(
+      "Clear all messages for everyone? This cannot be undone."
+    );
+    if (!ok) return false;
+
+    try {
+      await clearAllMessages();
+      setMessages([]);
+      setHistoryState("ready");
+      return true;
+    } catch (err) {
+      showNotice(getErrorMessage(err));
+      return false;
+    }
+  }, [showNotice]);
+
   const handleTyping = useCallback(() => {
     const socket = getSocket();
     if (socket && socket.connected) socket.emit("typing");
@@ -169,6 +198,7 @@ export default function Chat({ username, onLogout }) {
       notice={notice}
       onRetryHistory={loadHistory}
       onSend={handleSend}
+      onClear={handleClear}
       onTyping={handleTyping}
       onTypingStop={handleTypingStop}
       onLogout={onLogout}

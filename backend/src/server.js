@@ -32,6 +32,10 @@ async function main() {
   // 3. Wire up all realtime event handlers
   initializeSocket(io);
 
+  // Expose io to Express routes so REST handlers can broadcast
+  // (e.g. DELETE /api/messages emits `chat_cleared` to every client).
+  app.set("io", io);
+
   // 4. Start listening
   server.listen(PORT, () => {
     console.log(`✅ PulseChat backend running on http://localhost:${PORT}`);
