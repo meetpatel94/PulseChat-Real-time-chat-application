@@ -204,4 +204,28 @@ async function leaveGroup(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup };
+
+async function setMemberNickname(req, res, next) {
+  try {
+    const { userId } = req.params;
+    const { nickname } = req.body || {};
+    const group = await Conversation.findById(req.params.id);
+    if (!group || group.type !== "group" || !isMember(group, req.auth.userId))
+      return res.status(404).json({ success: false, error: "Group not found" });
+    if (!group.admins.some((id) => String(id) === req.auth.userId))
+      return res.status(403).json({ success: false, error: "Group admin permission required" });
+    if (!mongoose.isValidObjectId(userId) || !isMember(group, userId))
+      return res.status(404).json({ success: false, error: "Member not found" });
+    if (typeof nickname !== "string" || nickname.trim().length > 40)
+      return res.status(400).json({ success: false, error: "Nickname must be 1–40 characters" });
+    const clean = nickname.trim();
+    if (clean) group.memberNicknames.set(String(userId), clean);
+    else group.memberNicknames.delete(String(userId));
+    await group.save();
+    const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
+    req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
+    res.json({ success: true, conversation: populated });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname };
