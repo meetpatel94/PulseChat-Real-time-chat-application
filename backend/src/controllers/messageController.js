@@ -65,7 +65,7 @@ async function uploadAttachment(req, res, next) {
       (mimeType === "audio/ogg" && buffer.subarray(0,4).toString() === "OggS") ||
       (mimeType === "audio/wav" && buffer.subarray(0,4).toString() === "RIFF" && buffer.subarray(8,12).toString() === "WAVE") ||
       (mimeType === "audio/webm" && buffer.subarray(0,4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])));
-    if (!validSignature) return res.status(415).json({ success: false, error: "The file content does not match a supported image/video type" });
+    if (!validSignature) return res.status(415).json({ success: false, error: "The file content does not match its declared image, video, PDF or audio type" });
     const extension = ({ "image/jpeg":".jpg", "image/png":".png", "image/gif":".gif", "image/webp":".webp", "video/mp4":".mp4", "video/webm":".webm", "video/quicktime":".mov", "application/pdf":".pdf", "audio/mpeg":".mp3", "audio/mp4":".m4a", "audio/ogg":".ogg", "audio/wav":".wav", "audio/webm":".webm" })[mimeType];
     const filename = `${crypto.randomUUID()}${extension}`;
     const uploadDir = path.join(__dirname, "../../uploads");
