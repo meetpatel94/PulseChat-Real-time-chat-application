@@ -75,7 +75,8 @@ async function getMessages(req, res, next) {
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 100);
     const messages = await Message.find({ conversation: conversation._id, hiddenFor: { $ne: req.auth.userId } })
       .sort({ createdAt: -1 }).limit(limit)
-      .populate("sender", "name username avatarUrl").lean();
+      .populate("sender", "name username avatarUrl")
+      .populate({ path: "replyTo", select: "text attachment sender deletedForEveryone createdAt", populate: { path: "sender", select: "name username" } }).lean();
     res.json({ success: true, messages: messages.reverse() });
   } catch (err) { next(err); }
 }
