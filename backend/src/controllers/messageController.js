@@ -19,7 +19,7 @@ async function createMessage(req, res, next) {
     conversation.lastMessageAt = message.createdAt;
     await conversation.save();
     const populated = await Message.findById(message._id).populate("sender", "name username avatarUrl");
-    req.app.get("io")?.to(String(conversation._id)).emit("message:new", populated);
+    req.app.get("io")?.to(`conversation:${String(conversation._id)}`).emit("message:new", populated);
     res.status(201).json({ success: true, message: populated });
   } catch (err) { next(err); }
 }
@@ -33,7 +33,7 @@ async function markRead(req, res, next) {
       { conversation: conversation._id, sender: { $ne: req.auth.userId }, readBy: { $ne: req.auth.userId } },
       { $addToSet: { readBy: req.auth.userId } }
     );
-    req.app.get("io")?.to(String(conversation._id)).emit("messages:read", {
+    req.app.get("io")?.to(`conversation:${String(conversation._id)}`).emit("messages:read", {
       conversationId: String(conversation._id), userId: req.auth.userId,
     });
     res.json({ success: true });
