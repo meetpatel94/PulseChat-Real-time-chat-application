@@ -4,6 +4,13 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const User = require("../models/User");
+
+async function isDirectBlocked(conversation, userId) {
+  if (conversation.type !== "direct") return false;
+  const users = await User.find({ _id: { $in: conversation.participants } }).select("_id blockedUsers").lean();
+  return users.some((u) => (u.blockedUsers || []).some((id) => String(id) !== String(u._id) && conversation.participants.some((p) => String(p) === String(id))));
+}
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime"]);
@@ -39,6 +46,7 @@ async function uploadAttachment(req, res, next) {
     if (!mongoose.isValidObjectId(conversationId)) return res.status(400).json({ success: false, error: "Invalid conversation id" });
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !isMember(conversation, req.auth.userId)) return res.status(404).json({ success: false, error: "Conversation not found" });
+    if (await isDirectBlocked(conversation, req.auth.userId)) return res.status(403).json({ success: false, error: "Messaging is unavailable because one account has blocked the other" });
     const buffer = req.body;
     const mimeType = req.headers["x-file-mime"];
     const originalName = decodeURIComponent(req.headers["x-file-name"] || "attachment").slice(0, 180);
