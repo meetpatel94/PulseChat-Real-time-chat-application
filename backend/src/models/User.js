@@ -13,6 +13,8 @@ const userSchema = new mongoose.Schema(
     bio: { type: String, default: "", maxlength: 160 },
     isActive: { type: Boolean, default: true },
     lastSeenAt: { type: Date, default: Date.now },
+    readReceiptsEnabled: { type: Boolean, default: true },
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );
