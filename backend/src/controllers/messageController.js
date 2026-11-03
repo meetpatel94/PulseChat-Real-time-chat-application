@@ -50,7 +50,7 @@ async function uploadAttachment(req, res, next) {
       (mimeType === "image/png" && buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
       (mimeType === "image/gif" && ["GIF87a","GIF89a"].includes(buffer.subarray(0,6).toString())) ||
       (mimeType === "image/webp" && buffer.subarray(0,4).toString() === "RIFF" && buffer.subarray(8,12).toString() === "WEBP") ||
-      (mimeType.startsWith("video/") && (buffer.subarray(4,8).toString() === "ftyp" || buffer.subarray(0,4).toString() === "RIFF" || buffer.subarray(0,4).toString() === "\u001aE\u df\u a3"));
+      (mimeType.startsWith("video/") && (buffer.subarray(4,8).toString() === "ftyp" || buffer.subarray(0,4).toString() === "RIFF" || buffer.subarray(0,4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))));
     if (!validSignature) return res.status(415).json({ success: false, error: "The file content does not match a supported image/video type" });
     const extension = ({ "image/jpeg":".jpg", "image/png":".png", "image/gif":".gif", "image/webp":".webp", "video/mp4":".mp4", "video/webm":".webm", "video/quicktime":".mov" })[mimeType];
     const filename = `${crypto.randomUUID()}${extension}`;
