@@ -1,5 +1,12 @@
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const User = require("../models/User");
+
+async function isDirectBlocked(conversation) {
+  if (conversation.type !== "direct") return false;
+  const users = await User.find({ _id: { $in: conversation.participants } }).select("_id blockedUsers").lean();
+  return users.some((u) => (u.blockedUsers || []).some((id) => conversation.participants.some((p) => String(p) === String(id) && String(p) !== String(u._id))));
+}
 
 const MAX_MESSAGE_LENGTH = 4000;
 
