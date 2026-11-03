@@ -367,3 +367,26 @@ MONGODB_URI=mongodb://127.0.0.1:27017/pulsechat
 CLIENT_URL=http://localhost:5173
 JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
 ```
+
+
+## PulseChat authenticated workspace (active development)
+
+The React/Vite client and Express/MongoDB backend are being consolidated around account-based access. The new workspace supports:
+- Account registration and sign-in with password hashing and expiring JWTs.
+- Authenticated Socket.IO handshakes; client-supplied usernames are not trusted.
+- Global chat, member-scoped direct conversations and group conversations.
+- Conversation history, room membership checks, group admin member additions and read markers.
+- Per-conversation background color preferences and a persistent light/dark appearance preference.
+- Responsive workspace layout and reduced-motion-aware UI animations.
+
+### Updated local setup
+
+1. In `backend/.env`, set `MONGODB_URI`, `CLIENT_URL`, and a cryptographically random `JWT_SECRET` of at least 32 characters.
+2. Run `npm install` in `backend/` to install Express, Mongoose, Socket.IO, Helmet and express-rate-limit.
+3. Start backend with `npm run dev`.
+4. Run `npm install` and `npm run dev` in `frontend/`.
+5. Register an account from the sign-in screen. Existing username-only localStorage sessions are not migrated; create an account.
+
+### Security and release status
+
+This is an in-progress foundation, not a security certification or production release. Before public deployment, complete automated integration tests, use HTTPS, review token storage/XSS exposure, add refresh-session rotation and revocation, email verification and password recovery, enforce production CORS/origin allowlists, add abuse controls and monitoring, and perform a security review. Never expose the MongoDB connection string or JWT secret in frontend variables.
