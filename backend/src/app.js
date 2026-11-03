@@ -36,7 +36,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10kb" }));
+app.use(express.json({ limit: "3mb" }));
 
 // Routes
 app.use("/api/health", healthRoutes);
