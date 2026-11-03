@@ -432,3 +432,15 @@ The current development branch also includes:
 
 ### Privacy behavior
 Blocking is currently scoped to direct/private conversations. It does not remove users from shared groups or hide their messages in a group. Group membership and moderation remain controlled by group admins.
+
+
+## Media, replies and WhatsApp-inspired UI
+
+Latest development updates add:
+- Message replies with stored reply references and quoted context that remains visible after reloading history.
+- Per-attachment save/download controls and a full-screen viewer with reply and delete actions.
+- Group media gallery items open in the same viewer, with save and delete controls.
+- Supported attachments: JPG, PNG, GIF, WebP, MP4, WebM, MOV, PDF, MP3, M4A, OGG and WAV (25 MB maximum; signature-checked on upload).
+- Group member action menu for private messaging, admin promotion/demotion, nickname assignment and member removal.
+- Admin-managed group nicknames persisted on the conversation.
+- WhatsApp-inspired dark theme, rounded controls, and Settings moved to the bottom of the sidebar.
