@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const conversationSchema = new mongoose.Schema({
   type: { type: String, enum: ["global", "direct", "group"], required: true },
   title: { type: String, trim: true, maxlength: 80, default: "" },
+  avatarUrl: { type: String, default: "" },
+  onlyAdminsCanMessage: { type: Boolean, default: false },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   memberNicknames: { type: Map, of: String, default: {} },
