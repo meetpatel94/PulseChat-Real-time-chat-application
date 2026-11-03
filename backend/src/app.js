@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
+const { rateLimit } = require("express-rate-limit");
 const messageRoutes = require("./routes/messageRoutes");
 const healthRoutes = require("./routes/healthRoutes");
 const authRoutes = require("./routes/authRoutes");
@@ -7,6 +9,10 @@ const conversationRoutes = require("./routes/conversationRoutes");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
 const app = express();
+
+app.disable("x-powered-by");
+app.use(helmet());
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: "draft-7", legacyHeaders: false, message: { success: false, error: "Too many authentication attempts. Try again later." } });
 
 // CORS — allow only the configured frontend origin
 app.use(
@@ -19,7 +25,7 @@ app.use(express.json({ limit: "10kb" }));
 
 // Routes
 app.use("/api/health", healthRoutes);
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/conversations", conversationRoutes);
 app.use("/api/messages", messageRoutes);
 
