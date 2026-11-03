@@ -305,6 +305,47 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     } catch (err) { setError(err.response?.data?.error || "Could not update group permissions."); }
   }
 
+  async function toggleConversationPin(conversation) {
+    const id = String(conversation._id || conversation.id);
+    const pinned = (conversation.pinnedBy || []).some((value) => String(value._id || value) === user.id);
+    try { await setConversationPin(id, !pinned); await refreshConversations(); setConversationMenuId(null); }
+    catch (err) { setError(err.response?.data?.error || "Could not update pin."); }
+  }
+
+  async function deleteConversationForMe(conversation) {
+    const id = String(conversation._id || conversation.id);
+    if (!window.confirm("Delete this chat from your chat list? Other members will keep their chat history.")) return;
+    try { await hideConversation(id); setConversations((prev) => prev.filter((item) => String(item._id || item.id) !== id)); if (String(activeId) === id) { setActive(null); setMessages([]); } setConversationMenuId(null); }
+    catch (err) { setError(err.response?.data?.error || "Could not delete this chat."); }
+  }
+
+  async function clearConversationForMe(conversation) {
+    const id = String(conversation._id || conversation.id);
+    if (!window.confirm("Clear your messages in this chat? Other members will keep their messages.")) return;
+    try { await clearConversationHistory(id); if (String(activeId) === id) setMessages([]); await refreshConversations(); setConversationMenuId(null); }
+    catch (err) { setError(err.response?.data?.error || "Could not clear this chat."); }
+  }
+
+  async function blockConversationUser(conversation) {
+    const other = conversation.participants?.find((person) => String(person._id || person.id) !== user.id);
+    if (!other || !window.confirm("Block this user? You can unblock them later in Settings.")) return;
+    try { await blockUser(String(other._id || other.id)); setBlockedUsers(await getBlockedUsers()); setConversationMenuId(null); await refreshConversations(); }
+    catch (err) { setError(err.response?.data?.error || "Could not block this account."); }
+  }
+
+  function sendQuickMessage(value) {
+    const clean = String(value || "").trim();
+    if (!clean || !activeId || !online || !canSend) return;
+    const socket = getSocket();
+    if (!socket?.connected) { setError("Realtime connection is offline."); return; }
+    socket.emit("message:send", { conversationId: activeId, text: clean, replyToMessageId: replyTo?._id }, (result) => {
+      if (!result?.success) setError(result?.error || "Message could not be sent.");
+      else { setMessages((prev) => prev.some((m) => String(m._id) === String(result.message?._id)) ? prev : [...prev, result.message]); setReplyTo(null); }
+    });
+    setShowStickerPicker(false); setGifUrl("");
+  }
+
+  function appendEmoji(emoji) { setText((current) => current + emoji); document.querySelector(".composer input[aria-label='Write a message']")?.focus(); }
   async function startDirect(person) {
     setBusy(true); setError("");
     try {
@@ -497,7 +538,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     group: conversations.filter((c) => c.type === "group"),
   }), [conversations]);
 
-  return <main className="pulse-app" data-theme={mode}>
+  return <main className="pulse-app" data-theme={mode} style={{ zoom: `${uiScale}%` }}>
     <aside className="pulse-sidebar">
       <nav className="pulse-nav-rail" aria-label="Main navigation">
         <div className="rail-brand" title="PulseChat">ϟ</div>
