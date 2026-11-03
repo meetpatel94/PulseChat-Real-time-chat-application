@@ -269,7 +269,7 @@ export default function Chat({ user, token, onLogout }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeId) return;
-    if (!ACCEPTED_MEDIA.includes(file.type)) { setError("Choose a supported image or video file."); return; }
+    if (!ACCEPTED_MEDIA.includes(file.type)) { setError("Choose a supported image, video, PDF or audio file."); return; }
     if (file.size > MAX_FILE_SIZE) { setError("File must be 25 MB or smaller."); return; }
     setUploading(true); setError("");
     try {
@@ -529,14 +529,14 @@ export default function Chat({ user, token, onLogout }) {
         const admin = groupAdmins.some((a) => String(a._id || a) === memberId);
         const self = memberId === user.id;
         return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{active?.memberNicknames?.[memberId] || member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
-          <div className="member-controls"><button className="member-more-button" onClick={() => setMemberMenuId(memberMenuId === memberId ? null : memberId)} aria-label={"Actions for " + member.name}>⋯</button>
+          {!self && <div className="member-controls"><button className="member-more-button" onClick={() => setMemberMenuId(memberMenuId === memberId ? null : memberId)} aria-label={"Actions for " + member.name}>⋯</button>
             {memberMenuId === memberId && <div className="member-action-menu">
               <button onClick={() => openPrivateMessage(member)}>✉ Send message privately</button>
               {isAdmin && !self && <button onClick={() => changeAdmin(memberId, admin ? "demote" : "promote")}>{admin ? "♙ Remove admin" : "♟ Make admin"}</button>}
               {isAdmin && !self && <button onClick={() => updateNickname(memberId)}>✎ Add nickname</button>}
               {isAdmin && !self && <button className="danger-action" onClick={() => kickMember(memberId)}>✕ Remove member</button>}
             </div>}
-          </div>
+          </div>}
         </div>;
       })}</div>
       <button className="leave-group-button" disabled={isOnlyAdmin} onClick={exitGroup}>{isOnlyAdmin ? "Promote another admin before leaving" : "Exit group"}</button>
