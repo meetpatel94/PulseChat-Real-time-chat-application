@@ -1,6 +1,6 @@
 const express = require("express");
 const requireAuth = require("../middleware/requireAuth");
-const { listConversations, createConversation, getMessages, addMembers, getGlobalConversation } = require("../controllers/conversationController");
+const { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup } = require("../controllers/conversationController");
 const router = express.Router();
 router.use(requireAuth);
 router.get("/", listConversations);
@@ -8,4 +8,8 @@ router.get("/global", getGlobalConversation);
 router.post("/", createConversation);
 router.get("/:id/messages", getMessages);
 router.post("/:id/members", addMembers);
+router.patch("/:id", updateGroup);
+router.patch("/:id/admin", setGroupAdmin);
+router.delete("/:id/members/:userId", removeGroupMember);
+router.post("/:id/leave", leaveGroup);
 module.exports = router;
