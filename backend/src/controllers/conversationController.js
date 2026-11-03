@@ -14,7 +14,7 @@ async function listConversations(req, res, next) {
       .populate("admins", "name username")
       .lean();
     const conversations = await Promise.all(rows.map(async (row) => {
-      const lastMessage = await Message.findOne({ conversation: row._id, deletedAt: null })
+      const lastMessage = await Message.findOne({ conversation: row._id, deletedAt: null, hiddenFor: { $ne: req.auth.userId } })
         .sort({ createdAt: -1 }).populate("sender", "name username").lean();
       return { ...row, lastMessage };
     }));
