@@ -5,7 +5,9 @@ const Message = require("../models/Message");
 
 async function usersHaveBlockedEachOther(a, b) {
   const blocked = await User.find({ _id: { $in: [a, b] } }).select("_id blockedUsers").lean();
-  return blocked.some((u) => (u.blockedUsers || []).some((id) => String(id) === String(u._id) ? false : [String(a), String(b)].includes(String(id))));
+  return blocked.some((u) => (u.blockedUsers || []).some((id) =>
+    blocked.some((other) => String(other._id) !== String(u._id) && String(other._id) === String(id))
+  ));
 }
 
 const isMember = (conversation, userId) =>
