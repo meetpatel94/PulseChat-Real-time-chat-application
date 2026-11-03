@@ -174,7 +174,9 @@ async function removeGroupMember(req, res, next) {
     group.participants.pull(userId);
     group.admins.pull(userId);
     await group.save();
-    req.app.get("io")?.to(`user:${userId}`).emit("group:removed", { conversationId: String(group._id) });
+    const io = req.app.get("io");
+    io?.in(`user:${userId}`).socketsLeave(`conversation:${group._id}`);
+    io?.to(`user:${userId}`).emit("group:removed", { conversationId: String(group._id) });
     const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
     req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
     res.json({ success: true, conversation: populated });
@@ -192,7 +194,9 @@ async function leaveGroup(req, res, next) {
     group.participants.pull(req.auth.userId);
     group.admins.pull(req.auth.userId);
     await group.save();
-    req.app.get("io")?.to(`user:${req.auth.userId}`).emit("group:left", { conversationId: String(group._id) });
+    const io = req.app.get("io");
+    io?.in(`user:${req.auth.userId}`).socketsLeave(`conversation:${group._id}`);
+    io?.to(`user:${req.auth.userId}`).emit("group:left", { conversationId: String(group._id) });
     req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", { _id: String(group._id), participants: group.participants, admins: group.admins });
     res.json({ success: true });
   } catch (err) { next(err); }
