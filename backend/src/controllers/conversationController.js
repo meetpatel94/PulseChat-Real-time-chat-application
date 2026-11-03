@@ -3,6 +3,11 @@ const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const Message = require("../models/Message");
 
+async function usersHaveBlockedEachOther(a, b) {
+  const blocked = await User.find({ _id: { $in: [a, b] } }).select("_id blockedUsers").lean();
+  return blocked.some((u) => (u.blockedUsers || []).some((id) => String(id) === String(u._id) ? false : [String(a), String(b)].includes(String(id))));
+}
+
 const isMember = (conversation, userId) =>
   conversation.participants.some((id) => String(id) === String(userId));
 
@@ -35,6 +40,8 @@ async function createConversation(req, res, next) {
     if (validUsers !== ids.length) return res.status(400).json({ success: false, error: "One or more users do not exist" });
     if (type === "direct" && ids.length !== 2)
       return res.status(400).json({ success: false, error: "A private chat requires exactly one other user" });
+    if (type === "direct" && await usersHaveBlockedEachOther(ids[0], ids[1]))
+      return res.status(403).json({ success: false, error: "This private chat is unavailable because one account has blocked the other" });
     if (type === "group" && (ids.length < 2 || typeof title !== "string" || !title.trim() || title.trim().length > 80))
       return res.status(400).json({ success: false, error: "Groups need a name and at least one other member" });
 
@@ -111,4 +118,84 @@ async function getGlobalConversation(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation };
+
+async function updateGroup(req, res, next) {
+  try {
+    const { title } = req.body || {};
+    const group = await Conversation.findById(req.params.id);
+    if (!group || group.type !== "group") return res.status(404).json({ success: false, error: "Group not found" });
+    if (!isMember(group, req.auth.userId) || !group.admins.some((id) => String(id) === req.auth.userId))
+      return res.status(403).json({ success: false, error: "Group admin permission required" });
+    if (typeof title !== "string" || !title.trim() || title.trim().length > 80)
+      return res.status(400).json({ success: false, error: "Group name must be 1–80 characters" });
+    group.title = title.trim();
+    await group.save();
+    const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
+    req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
+    res.json({ success: true, conversation: populated });
+  } catch (err) { next(err); }
+}
+
+async function setGroupAdmin(req, res, next) {
+  try {
+    const { userId, action = "promote" } = req.body || {};
+    const group = await Conversation.findById(req.params.id);
+    if (!group || group.type !== "group") return res.status(404).json({ success: false, error: "Group not found" });
+    if (!isMember(group, req.auth.userId) || !group.admins.some((id) => String(id) === req.auth.userId))
+      return res.status(403).json({ success: false, error: "Group admin permission required" });
+    if (!mongoose.isValidObjectId(userId) || !isMember(group, userId) || !["promote", "demote"].includes(action))
+      return res.status(400).json({ success: false, error: "Select a valid group member and action" });
+    if (action === "promote") group.admins.addToSet(userId);
+    else {
+      if (group.admins.length <= 1 && group.admins.some((id) => String(id) === String(userId)))
+        return res.status(400).json({ success: false, error: "A group must always have at least one admin" });
+      group.admins.pull(userId);
+    }
+    await group.save();
+    const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
+    req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
+    res.json({ success: true, conversation: populated });
+  } catch (err) { next(err); }
+}
+
+async function removeGroupMember(req, res, next) {
+  try {
+    const group = await Conversation.findById(req.params.id);
+    const { userId } = req.params;
+    if (!group || group.type !== "group") return res.status(404).json({ success: false, error: "Group not found" });
+    if (!isMember(group, req.auth.userId) || !group.admins.some((id) => String(id) === req.auth.userId))
+      return res.status(403).json({ success: false, error: "Group admin permission required" });
+    if (!mongoose.isValidObjectId(userId) || !isMember(group, userId))
+      return res.status(404).json({ success: false, error: "Member not found" });
+    if (String(userId) === req.auth.userId)
+      return res.status(400).json({ success: false, error: "Use Leave group to exit" });
+    if (group.admins.some((id) => String(id) === String(userId)) && group.admins.length === 1)
+      return res.status(400).json({ success: false, error: "Promote another admin before removing the only admin" });
+    group.participants.pull(userId);
+    group.admins.pull(userId);
+    await group.save();
+    req.app.get("io")?.to(`user:${userId}`).emit("group:removed", { conversationId: String(group._id) });
+    const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
+    req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
+    res.json({ success: true, conversation: populated });
+  } catch (err) { next(err); }
+}
+
+async function leaveGroup(req, res, next) {
+  try {
+    const group = await Conversation.findById(req.params.id);
+    if (!group || group.type !== "group" || !isMember(group, req.auth.userId))
+      return res.status(404).json({ success: false, error: "Group not found" });
+    const isAdmin = group.admins.some((id) => String(id) === req.auth.userId);
+    if (isAdmin && group.admins.length === 1)
+      return res.status(400).json({ success: false, error: "Promote another admin before leaving the group" });
+    group.participants.pull(req.auth.userId);
+    group.admins.pull(req.auth.userId);
+    await group.save();
+    req.app.get("io")?.to(`user:${req.auth.userId}`).emit("group:left", { conversationId: String(group._id) });
+    req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", { _id: String(group._id), participants: group.participants, admins: group.admins });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup };
