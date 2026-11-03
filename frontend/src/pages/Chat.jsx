@@ -9,7 +9,7 @@ import { connectSocket, disconnectSocket, getSocket } from "../services/socket.j
 
 const THEMES = ["#e8f2ee", "#f1e8f6", "#f8eee2", "#e8eef8", "#f7e8eb", "#e9edf0"];
 const THEME_KEY = "pulsechat_chat_themes";
-const MODE_KEY = "pulsechat_mode";
+const MODE_KEY = "pulsechat_mode_v2";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ACCEPTED_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
 
@@ -524,7 +524,7 @@ export default function Chat({ user, token, onLogout }) {
         const memberId = String(member._id || member.id);
         const admin = groupAdmins.some((a) => String(a._id || a) === memberId);
         const self = memberId === user.id;
-        return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
+        return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{active?.memberNicknames?.[memberId] || member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
           <div className="member-controls"><button className="member-more-button" onClick={() => setMemberMenuId(memberMenuId === memberId ? null : memberId)} aria-label={"Actions for " + member.name}>⋯</button>
             {memberMenuId === memberId && <div className="member-action-menu">
               <button onClick={() => openPrivateMessage(member)}>✉ Send message privately</button>
