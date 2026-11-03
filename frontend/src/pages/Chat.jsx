@@ -40,7 +40,7 @@ function AppIcon({ name, size = 18 }) {
 function MessageText({ value }) {
   const urlPattern = /(https?:\/\/[^\s]+)/gi;
   return value.split(urlPattern).map((part, index) => /^https?:\/\//i.test(part)
-    ? <a key={index} href={part} target="_blank" rel="noopener noreferrer">{part}</a>
+    ? <a key={index} href={part} target="_blank" rel="noopener noreferrer">{/\.gif(?:\?.*)?$/i.test(part) ? <img className="inline-gif" src={part} alt="GIF"/> : part}</a>
     : <span key={index}>{part}</span>);
 }
 
@@ -330,7 +330,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
   async function blockConversationUser(conversation) {
     const other = conversation.participants?.find((person) => String(person._id || person.id) !== user.id);
     if (!other || !window.confirm("Block this user? You can unblock them later in Settings.")) return;
-    try { await blockUser(String(other._id || other.id)); setBlockedUsers(await getBlockedUsers()); setConversationMenuId(null); await refreshConversations(); }
+    try { await blockUser(String(other._id || other.id)); setBlockedUsers(await getBlockedUsers()); setConversations((prev) => prev.filter((item) => String(item._id || item.id) !== String(conversation._id || conversation.id))); if (String(activeId) === String(conversation._id || conversation.id)) { setActive(null); setMessages([]); } setConversationMenuId(null); await refreshConversations(); }
     catch (err) { setError(err.response?.data?.error || "Could not block this account."); }
   }
 
@@ -660,7 +660,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
                   <time>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                   {own && !m.deletedForEveryone && <span className={`receipt ${seen ? "receipt-seen" : delivered ? "receipt-delivered" : ""}`} title={seen ? "Seen" : delivered ? "Delivered" : "Sent"}>{delivered || seen ? "✓✓" : "✓"}</span>}
                   {!m.deletedForEveryone && <div className="message-actions">
-                    <button className="message-menu-trigger" onClick={() => setMenuMessageId(menuMessageId === m._id ? null : m._id)} aria-label="Message options">⋯</button>
+                    <button className="message-menu-trigger" onClick={() => setMenuMessageId(menuMessageId === m._id ? null : m._id)} aria-label="Message options"><AppIcon name="more" size={16}/></button>
                     {menuMessageId === m._id && <div className="message-menu">
                       <button onClick={() => startReply(m)}>↩ Reply</button>
                       {m.attachment && <button onClick={() => saveAttachment(m)}>↓ Save media</button>}
