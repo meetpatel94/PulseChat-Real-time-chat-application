@@ -82,7 +82,13 @@ async function getAttachment(req, res, next) {
     const conversation = await Conversation.findById(conversationId).select("type participants");
     if (!conversation || !isMember(conversation, req.auth.userId))
       return res.status(404).json({ success: false, error: "Attachment not found" });
-    const message = await Message.findOne({ conversation: conversationId, "attachment.url": `/api/messages/${conversationId}/attachments/${filename}` }).select("attachment");
+    const message = await Message.findOne({
+      conversation: conversationId,
+      $or: [
+        { "attachment.url": `/api/messages/${conversationId}/attachments/${filename}` },
+        { "attachment.url": `/uploads/${filename}` },
+      ],
+    }).select("attachment");
     if (!message?.attachment) return res.status(404).json({ success: false, error: "Attachment not found" });
     const filePath = path.join(__dirname, "../../uploads", filename);
     res.setHeader("Content-Type", message.attachment.mimeType);
