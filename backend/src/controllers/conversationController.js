@@ -124,14 +124,26 @@ async function getGlobalConversation(req, res, next) {
 
 async function updateGroup(req, res, next) {
   try {
-    const { title } = req.body || {};
+    const { title, avatarUrl, onlyAdminsCanMessage } = req.body || {};
     const group = await Conversation.findById(req.params.id);
     if (!group || group.type !== "group") return res.status(404).json({ success: false, error: "Group not found" });
     if (!isMember(group, req.auth.userId) || !group.admins.some((id) => String(id) === req.auth.userId))
-      return res.status(403).json({ success: false, error: "Group admin permission required" });
-    if (typeof title !== "string" || !title.trim() || title.trim().length > 80)
-      return res.status(400).json({ success: false, error: "Group name must be 1–80 characters" });
-    group.title = title.trim();
+      return res.status(403).json({ success: false, error: "Only group admins can customize group settings" });
+    if (title !== undefined) {
+      if (typeof title !== "string" || !title.trim() || title.trim().length > 80)
+        return res.status(400).json({ success: false, error: "Group name must be 1–80 characters" });
+      group.title = title.trim();
+    }
+    if (avatarUrl !== undefined) {
+      if (typeof avatarUrl !== "string" || (avatarUrl && (!/^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl) || avatarUrl.length > 1400000)))
+        return res.status(400).json({ success: false, error: "Group photo must be a PNG, JPG or WebP image under 1 MB" });
+      group.avatarUrl = avatarUrl;
+    }
+    if (onlyAdminsCanMessage !== undefined) {
+      if (typeof onlyAdminsCanMessage !== "boolean")
+        return res.status(400).json({ success: false, error: "Invalid group messaging permission" });
+      group.onlyAdminsCanMessage = onlyAdminsCanMessage;
+    }
     await group.save();
     const populated = await Conversation.findById(group._id).populate("participants", "name username avatarUrl").populate("admins", "name username");
     req.app.get("io")?.to(`conversation:${group._id}`).emit("group:updated", populated);
