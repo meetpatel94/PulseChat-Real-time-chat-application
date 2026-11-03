@@ -559,21 +559,43 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
         </header>
         {activeSection !== "calls" && activeSection !== "global" && <label className="sidebar-search"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={activeSection === "groups" ? "Search groups" : "Search chats"}/></label>}
         <div className="conversation-list">
-          {activeSection === "chats" && grouped.direct.filter((c) => {
+          {activeSection === "chats" && [...grouped.direct].sort((a,b) => Number((b.pinnedBy||[]).some((id)=>String(id._id||id)===user.id))-Number((a.pinnedBy||[]).some((id)=>String(id._id||id)===user.id))).filter((c) => {
             const other=c.participants?.find((p)=>String(p._id||p.id)!==user.id);
             return !query.trim() || (other?.name+" "+other?.username).toLowerCase().includes(query.toLowerCase());
           }).map((c) => {
             const other=c.participants?.find((p)=>String(p._id||p.id)!==user.id);
             const last=c.lastMessage;
-            return <button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
-              <span className="conversation-avatar">{other?.avatarUrl?<img src={other.avatarUrl} alt=""/>:other?.name?.[0]?.toUpperCase()||"?"}</span>
-              <span className="conversation-copy"><b>{other?.name||"Private chat"}</b><small>{last?.text || last?.attachment?.name || "@"+(other?.username||"member")}</small></span>
-              <time>{last?.createdAt?new Date(last.createdAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</time>
-            </button>;
+            const pinned=(c.pinnedBy||[]).some((id)=>String(id._id||id)===user.id);
+            return <div className="conversation-row" key={c._id}>
+              <button className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>{setActive(c);setConversationMenuId(null);}}>
+                <span className="conversation-avatar">{other?.avatarUrl?<img src={other.avatarUrl} alt=""/>:other?.name?.[0]?.toUpperCase()||"?"}</span>
+                <span className="conversation-copy"><b>{other?.name||"Private chat"}</b><small>{last?.text || last?.attachment?.name || "@"+(other?.username||"member")}</small></span>
+                <span className="conversation-row-meta">{pinned&&<AppIcon name="pin" size={13}/>}<time>{last?.createdAt?new Date(last.createdAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</time></span>
+              </button>
+              <button className="conversation-row-menu-trigger" onClick={()=>setConversationMenuId(conversationMenuId===c._id?null:c._id)} aria-label="Chat options"><AppIcon name="more" size={17}/></button>
+              {conversationMenuId===c._id && <div className="conversation-context-menu">
+                <button onClick={()=>toggleConversationPin(c)}><AppIcon name="pin" size={15}/>{pinned?"Unpin chat":"Pin chat"}</button>
+                <button onClick={()=>blockConversationUser(c)}><AppIcon name="block" size={15}/>Block user</button>
+                <button onClick={()=>clearConversationForMe(c)}><AppIcon name="trash" size={15}/>Clear chat</button>
+                <button className="danger-action" onClick={()=>deleteConversationForMe(c)}><AppIcon name="trash" size={15}/>Delete chat</button>
+              </div>}
+            </div>;
           })}
-          {activeSection === "groups" && grouped.group.filter((c)=>(c.title||"").toLowerCase().includes(query.toLowerCase())).map((c)=><button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
-            <span className="conversation-avatar group-avatar">{c.avatarUrl?<img src={c.avatarUrl} alt=""/>:"✣"}</span><span className="conversation-copy"><b>{c.title}</b><small>{c.lastMessage?.text||c.lastMessage?.attachment?.name||`${c.participants?.length||0} members`}</small></span>
-          </button>)}
+          {activeSection === "groups" && [...grouped.group].sort((a,b) => Number((b.pinnedBy||[]).some((id)=>String(id._id||id)===user.id))-Number((a.pinnedBy||[]).some((id)=>String(id._id||id)===user.id))).filter((c)=>(c.title||"").toLowerCase().includes(query.toLowerCase())).map((c)=>{
+            const pinned=(c.pinnedBy||[]).some((id)=>String(id._id||id)===user.id);
+            return <div className="conversation-row" key={c._id}>
+              <button className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>{setActive(c);setConversationMenuId(null);}}>
+                <span className="conversation-avatar group-avatar">{c.avatarUrl?<img src={c.avatarUrl} alt=""/>:"✣"}</span><span className="conversation-copy"><b>{c.title}</b><small>{c.lastMessage?.text||c.lastMessage?.attachment?.name||`${c.participants?.length||0} members`}</small></span>
+                {pinned&&<AppIcon name="pin" size={13}/>}
+              </button>
+              <button className="conversation-row-menu-trigger" onClick={()=>setConversationMenuId(conversationMenuId===c._id?null:c._id)} aria-label="Group options"><AppIcon name="more" size={17}/></button>
+              {conversationMenuId===c._id && <div className="conversation-context-menu">
+                <button onClick={()=>toggleConversationPin(c)}><AppIcon name="pin" size={15}/>{pinned?"Unpin group":"Pin group"}</button>
+                <button onClick={()=>clearConversationForMe(c)}><AppIcon name="trash" size={15}/>Clear chat</button>
+                <button className="danger-action" onClick={()=>deleteConversationForMe(c)}><AppIcon name="trash" size={15}/>Delete chat</button>
+              </div>}
+            </div>;
+          })}
           {activeSection === "global" && conversations.filter((c)=>c.type==="global").map((c)=><button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
             <span className="conversation-avatar global-avatar">◎</span><span className="conversation-copy"><b>Global Lounge</b><small>{c.lastMessage?.text||"Everyone on PulseChat"}</small></span>
           </button>)}
