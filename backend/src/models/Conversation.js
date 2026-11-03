@@ -5,6 +5,7 @@ const conversationSchema = new mongoose.Schema({
   title: { type: String, trim: true, maxlength: 80, default: "" },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  memberNicknames: { type: Map, of: String, default: {} },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   lastMessageAt: { type: Date, default: Date.now },
 }, { timestamps: true });
