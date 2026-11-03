@@ -11,6 +11,8 @@ export async function registerAccount(payload) { return (await api.post("/auth/r
 export async function loginAccount(payload) { return (await api.post("/auth/login", payload)).data; }
 export async function getCurrentUser() { return (await api.get("/auth/me")).data.user; }
 export async function updateProfile(payload) { return (await api.patch("/auth/profile", payload)).data.user; }
+export async function setConversationPin(id, pinned) { return (await api.patch(`/conversations/${id}/pin`, { pinned })).data.conversation; }
+export async function hideConversation(id) { return (await api.delete(`/conversations/${id}`)).data; }
 export async function searchUsers(q) { return (await api.get("/auth/users", { params: { q } })).data.users; }
 export async function getConversations() { return (await api.get("/conversations")).data.conversations; }
 export async function getGlobalConversation() { return (await api.get("/conversations/global")).data.conversation; }
