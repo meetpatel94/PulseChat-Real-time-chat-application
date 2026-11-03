@@ -13,7 +13,7 @@ async function isDirectBlocked(conversation, userId) {
 }
 
 const MAX_UPLOAD = 25 * 1024 * 1024;
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime"]);
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "application/pdf", "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/webm"]);
 const isMember = (conversation, userId) => conversation.type === "global" ||
   conversation.participants.some((id) => String(id) === String(userId));
 
@@ -52,15 +52,21 @@ async function uploadAttachment(req, res, next) {
     const originalName = decodeURIComponent(req.headers["x-file-name"] || "attachment").slice(0, 180);
     if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > MAX_UPLOAD)
       return res.status(400).json({ success: false, error: "Choose a file smaller than 25 MB" });
-    if (!ALLOWED.has(mimeType)) return res.status(415).json({ success: false, error: "Only JPG, PNG, GIF, WebP, MP4, WebM and MOV files are allowed" });
+    if (!ALLOWED.has(mimeType)) return res.status(415).json({ success: false, error: "Supported images, videos, PDF and common audio files only" });
     const isImage = mimeType.startsWith("image/");
     const validSignature = (mimeType === "image/jpeg" && buffer[0] === 0xff && buffer[1] === 0xd8) ||
       (mimeType === "image/png" && buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
       (mimeType === "image/gif" && ["GIF87a","GIF89a"].includes(buffer.subarray(0,6).toString())) ||
       (mimeType === "image/webp" && buffer.subarray(0,4).toString() === "RIFF" && buffer.subarray(8,12).toString() === "WEBP") ||
-      (mimeType.startsWith("video/") && (buffer.subarray(4,8).toString() === "ftyp" || buffer.subarray(0,4).toString() === "RIFF" || buffer.subarray(0,4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))));
+      (mimeType.startsWith("video/") && (buffer.subarray(4,8).toString() === "ftyp" || buffer.subarray(0,4).toString() === "RIFF" || buffer.subarray(0,4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])))) ||
+      (mimeType === "application/pdf" && buffer.subarray(0,5).toString() === "%PDF-") ||
+      (mimeType === "audio/mpeg" && (buffer.subarray(0,3).toString() === "ID3" || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0))) ||
+      (mimeType === "audio/mp4" && buffer.subarray(4,8).toString() === "ftyp") ||
+      (mimeType === "audio/ogg" && buffer.subarray(0,4).toString() === "OggS") ||
+      (mimeType === "audio/wav" && buffer.subarray(0,4).toString() === "RIFF" && buffer.subarray(8,12).toString() === "WAVE") ||
+      (mimeType === "audio/webm" && buffer.subarray(0,4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3])));
     if (!validSignature) return res.status(415).json({ success: false, error: "The file content does not match a supported image/video type" });
-    const extension = ({ "image/jpeg":".jpg", "image/png":".png", "image/gif":".gif", "image/webp":".webp", "video/mp4":".mp4", "video/webm":".webm", "video/quicktime":".mov" })[mimeType];
+    const extension = ({ "image/jpeg":".jpg", "image/png":".png", "image/gif":".gif", "image/webp":".webp", "video/mp4":".mp4", "video/webm":".webm", "video/quicktime":".mov", "application/pdf":".pdf", "audio/mpeg":".mp3", "audio/mp4":".m4a", "audio/ogg":".ogg", "audio/wav":".wav", "audio/webm":".webm" })[mimeType];
     const filename = `${crypto.randomUUID()}${extension}`;
     const uploadDir = path.join(__dirname, "../../uploads");
     await fs.mkdir(uploadDir, { recursive: true });
@@ -85,7 +91,7 @@ async function uploadAttachment(req, res, next) {
 async function getAttachment(req, res, next) {
   try {
     const { conversationId, filename } = req.params;
-    if (!mongoose.isValidObjectId(conversationId) || !/^[a-f0-9-]+\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(filename))
+    if (!mongoose.isValidObjectId(conversationId) || !/^[a-f0-9-]+\.(jpg|png|gif|webp|mp4|webm|mov|pdf|mp3|m4a|ogg|wav)$/i.test(filename))
       return res.status(400).json({ success: false, error: "Invalid attachment" });
     const conversation = await Conversation.findById(conversationId).select("type participants");
     if (!conversation || !isMember(conversation, req.auth.userId))
