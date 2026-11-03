@@ -34,6 +34,7 @@ async function createMessage(req, res, next) {
       text: text.trim(), readBy: [req.auth.userId],
     });
     conversation.lastMessageAt = message.createdAt;
+    conversation.hiddenFor = [];
     await conversation.save();
     const populated = await Message.findById(message._id).populate("sender", "name username avatarUrl").lean();
     req.app.get("io")?.to(`conversation:${String(conversation._id)}`).emit("message:new", populated);
