@@ -15,9 +15,9 @@ const isMember = (conversation, userId) =>
 
 async function listConversations(req, res, next) {
   try {
-    const rows = await Conversation.find({ participants: req.auth.userId })
+    const rows = await Conversation.find({ participants: req.auth.userId, hiddenFor: { $ne: req.auth.userId } })
       .sort({ lastMessageAt: -1 })
-      .populate("participants", "name username avatarUrl")
+      .populate("participants", "name username avatarUrl bio")
       .populate("admins", "name username")
       .lean();
     const conversations = await Promise.all(rows.map(async (row) => {
@@ -50,7 +50,7 @@ async function createConversation(req, res, next) {
     if (type === "direct") {
       const existing = await Conversation.findOne({ type: "direct", participants: { $all: ids, $size: 2 } })
         .populate("participants", "name username avatarUrl");
-      if (existing) return res.json({ success: true, conversation: existing });
+      if (existing) { existing.hiddenFor.pull(req.auth.userId); await existing.save(); return res.json({ success: true, conversation: existing }); }
     }
 
     const conversation = await Conversation.create({
@@ -242,4 +242,28 @@ async function setMemberNickname(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname };
+async function setConversationPin(req, res, next) {
+  try {
+    const { pinned } = req.body || {};
+    if (typeof pinned !== "boolean") return res.status(400).json({ success: false, error: "Pinned must be true or false" });
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || !isMember(conversation, req.auth.userId)) return res.status(404).json({ success: false, error: "Conversation not found" });
+    if (pinned) conversation.pinnedBy.addToSet(req.auth.userId);
+    else conversation.pinnedBy.pull(req.auth.userId);
+    await conversation.save();
+    res.json({ success: true, conversation });
+  } catch (err) { next(err); }
+}
+
+async function hideConversation(req, res, next) {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || !isMember(conversation, req.auth.userId)) return res.status(404).json({ success: false, error: "Conversation not found" });
+    conversation.hiddenFor.addToSet(req.auth.userId);
+    conversation.pinnedBy.pull(req.auth.userId);
+    await conversation.save();
+    res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+module.exports = { setConversationPin, hideConversation, listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname };
