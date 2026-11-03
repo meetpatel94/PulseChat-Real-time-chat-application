@@ -30,8 +30,6 @@ function initializeSocket(io) {
           return ack({ success: false, error: "Conversation not found" });
         if (await isDirectBlocked(conversation))
           return ack({ success: false, error: "Private messaging is blocked between these accounts" });
-        if (await isDirectBlocked(conversation))
-          return ack({ success: false, error: "Private messaging is blocked between these accounts" });
         const room = `conversation:${conversationId}`;
         await socket.join(room);
         const result = await Message.updateMany(
@@ -54,6 +52,8 @@ function initializeSocket(io) {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation || !isParticipant(conversation, userId))
           return ack({ success: false, error: "Conversation not found" });
+        if (await isDirectBlocked(conversation))
+          return ack({ success: false, error: "Private messaging is blocked between these accounts" });
         const room = `conversation:${conversationId}`;
         const roomSockets = io.sockets.adapter.rooms.get(room) || new Set();
         const deliveredTo = new Set();
