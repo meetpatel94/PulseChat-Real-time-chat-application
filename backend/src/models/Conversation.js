@@ -8,6 +8,8 @@ const conversationSchema = new mongoose.Schema({
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }],
   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   memberNicknames: { type: Map, of: String, default: {} },
+  pinnedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  hiddenFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   lastMessageAt: { type: Date, default: Date.now },
 }, { timestamps: true });
