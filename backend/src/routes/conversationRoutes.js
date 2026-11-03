@@ -1,12 +1,14 @@
 const express = require("express");
 const requireAuth = require("../middleware/requireAuth");
-const { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname } = require("../controllers/conversationController");
+const { listConversations, createConversation, getMessages, addMembers, getGlobalConversation, updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname, setConversationPin, hideConversation } = require("../controllers/conversationController");
 const router = express.Router();
 router.use(requireAuth);
 router.get("/", listConversations);
 router.get("/global", getGlobalConversation);
 router.post("/", createConversation);
 router.get("/:id/messages", getMessages);
+router.patch("/:id/pin", setConversationPin);
+router.delete("/:id", hideConversation);
 router.post("/:id/members", addMembers);
 router.patch("/:id", updateGroup);
 router.patch("/:id/admin", setGroupAdmin);
