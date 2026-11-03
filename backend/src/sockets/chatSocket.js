@@ -74,6 +74,7 @@ function initializeSocket(io) {
           replyTo: replyTo?._id || null,
         });
         conversation.lastMessageAt = message.createdAt;
+        conversation.hiddenFor = [];
         await conversation.save();
         const populated = await Message.findById(message._id)
           .populate("sender", "name username avatarUrl")
