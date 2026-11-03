@@ -1,53 +1,19 @@
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const api = axios.create({ baseURL: `${API_URL}/api`, timeout: 15000 });
 
-const api = axios.create({
-  baseURL: `${API_URL}/api`,
-  timeout: 10000,
-});
-
-/**
- * Fetch previous chat history (REST, from MongoDB).
- */
-export async function fetchMessages(limit = 100) {
-  const { data } = await api.get("/messages", { params: { limit } });
-  return Array.isArray(data) ? data : (data.messages || []);
+export function setAuthToken(token) {
+  if (token) api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  else delete api.defaults.headers.common.Authorization;
 }
-
-/**
- * Send a message via REST (fallback when the socket is not connected).
- */
-export async function sendRestMessage(username, text) {
-  const { data } = await api.post("/messages", { username, text });
-  return data;
-}
-
-/**
- * Delete a message by id.
- */
-export async function deleteMessage(id) {
-  const { data } = await api.delete(`/messages/${id}`);
-  return data;
-}
-
-/**
- * Clear the entire chat (all messages, for every user).
- */
-export async function clearAllMessages() {
-  const { data } = await api.delete("/messages");
-  return data;
-}
-
-/**
- * Extract a human-readable message from any axios/network error.
- */
-export function getErrorMessage(err) {
-  if (err && err.response && err.response.data && err.response.data.error) {
-    return err.response.data.error;
-  }
-  if (err && err.message === "Network Error") {
-    return "Cannot reach the chat server. Is the backend running?";
-  }
-  return (err && err.message) || "Something went wrong";
-}
+export async function registerAccount(payload) { return (await api.post("/auth/register", payload)).data; }
+export async function loginAccount(payload) { return (await api.post("/auth/login", payload)).data; }
+export async function getCurrentUser() { return (await api.get("/auth/me")).data.user; }
+export async function searchUsers(q) { return (await api.get("/auth/users", { params: { q } })).data.users; }
+export async function getConversations() { return (await api.get("/conversations")).data.conversations; }
+export async function getGlobalConversation() { return (await api.get("/conversations/global")).data.conversation; }
+export async function createConversation(payload) { return (await api.post("/conversations", payload)).data.conversation; }
+export async function getConversationMessages(id) { return (await api.get(`/conversations/${id}/messages`)).data.messages; }
+export async function markConversationRead(id) { return (await api.post(`/messages/${id}/read`)).data; }
+export async function addGroupMembers(id, userIds) { return (await api.post(`/conversations/${id}/members`, { userIds })).data.conversation; }
