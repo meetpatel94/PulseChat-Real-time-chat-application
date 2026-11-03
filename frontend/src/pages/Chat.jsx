@@ -329,7 +329,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     stopTyping();
   }
 
-  async function handleFile(event) {\n    if (!canSend) { setError("Only group admins can send messages right now."); return; }
+  async function handleFile(event) {
+    if (!canSend) { setError("Only group admins can send messages right now."); return; }
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeId) return;
