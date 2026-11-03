@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Conversation = require("../models/Conversation");
+const User = require("../models/User");
 const Message = require("../models/Message");
 
 const isMember = (conversation, userId) =>
@@ -30,6 +31,8 @@ async function createConversation(req, res, next) {
         participantIds.some((id) => !mongoose.isValidObjectId(id)))
       return res.status(400).json({ success: false, error: "Invalid participants" });
     const ids = [...new Set([String(req.auth.userId), ...participantIds.map(String)])];
+    const validUsers = await User.countDocuments({ _id: { $in: ids }, isActive: true });
+    if (validUsers !== ids.length) return res.status(400).json({ success: false, error: "One or more users do not exist" });
     if (type === "direct" && ids.length !== 2)
       return res.status(400).json({ success: false, error: "A private chat requires exactly one other user" });
     if (type === "group" && (ids.length < 2 || typeof title !== "string" || !title.trim() || title.trim().length > 80))
@@ -58,7 +61,7 @@ async function getMessages(req, res, next) {
     if (!mongoose.isValidObjectId(req.params.id))
       return res.status(400).json({ success: false, error: "Invalid conversation id" });
     const conversation = await Conversation.findById(req.params.id).select("participants");
-    if (!conversation || !isMember(conversation, req.auth.userId))
+    if (!conversation || (conversation.type !== "global" && !isMember(conversation, req.auth.userId)))
       return res.status(404).json({ success: false, error: "Conversation not found" });
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 100);
     const messages = await Message.find({ conversation: conversation._id, deletedAt: null })
