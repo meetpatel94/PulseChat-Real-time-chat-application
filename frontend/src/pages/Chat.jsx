@@ -3,7 +3,7 @@ import {
   addGroupMembers, clearConversationHistory, createConversation, deleteMessage as deleteMessageApi,
   getAttachmentBlob, getConversationMessages, getConversations, getGlobalConversation,
   markConversationRead, searchUsers, uploadAttachment, getSettings, updateSettings, getBlockedUsers, blockUser, unblockUser,
-  updateGroup, setGroupAdmin, removeGroupMember, leaveGroup,
+  updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname,
 } from "../services/api.js";
 import { connectSocket, disconnectSocket, getSocket } from "../services/socket.js";
 
@@ -18,7 +18,7 @@ export default function Chat({ user, token, onLogout }) {
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
-  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) || "light");
+  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) || "dark");
   const [themes, setThemes] = useState(() => { try { return JSON.parse(localStorage.getItem(THEME_KEY) || "{}"); } catch { return {}; } });
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState([]);
@@ -38,6 +38,9 @@ export default function Chat({ user, token, onLogout }) {
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [groupSearch, setGroupSearch] = useState("");
   const [groupMediaTab, setGroupMediaTab] = useState("media");
+  const [replyTo, setReplyTo] = useState(null);
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [memberMenuId, setMemberMenuId] = useState(null);
   const typingTimer = useRef(null);
   const typingActive = useRef(false);
   const fileInput = useRef(null);
@@ -254,9 +257,9 @@ export default function Chat({ user, token, onLogout }) {
     if (!clean || !activeId) return;
     const socket = getSocket();
     if (!socket?.connected) { setError("Realtime connection is offline. Reconnect before sending."); return; }
-    socket.emit("message:send", { conversationId: activeId, text: clean }, (result) => {
+    socket.emit("message:send", { conversationId: activeId, text: clean, replyToMessageId: replyTo?._id }, (result) => {
       if (!result?.success) setError(result?.error || "Message could not be sent.");
-      else setMessages((prev) => prev.some((m) => String(m._id) === String(result.message?._id)) ? prev : [...prev, result.message]);
+      else { setMessages((prev) => prev.some((m) => String(m._id) === String(result.message?._id)) ? prev : [...prev, result.message]); setReplyTo(null); }
     });
     setText("");
     stopTyping();
@@ -284,6 +287,7 @@ export default function Chat({ user, token, onLogout }) {
       if (scope === "me") setMessages((prev) => prev.filter((m) => String(m._id) !== String(message._id)));
       else setMessages((prev) => prev.map((m) => String(m._id) === String(message._id) ? { ...m, deletedForEveryone: true, text: "", attachment: null } : m));
       setMenuMessageId(null);
+      if (String(selectedMedia?._id) === String(message._id)) setSelectedMedia(null);
     } catch (err) { setError(err.response?.data?.error || "Could not delete message."); }
   }
 
@@ -337,6 +341,47 @@ export default function Chat({ user, token, onLogout }) {
     catch (err) { setError(err.response?.data?.error || "Could not unblock user."); }
   }
 
+
+  function saveAttachment(message) {
+    const url = mediaUrls[message?._id];
+    if (!url || !message?.attachment) return;
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = message.attachment.name || "pulsechat-media";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  async function openPrivateMessage(member) {
+    try {
+      const conversation = await createConversation({ type: "direct", participantIds: [String(member._id || member.id)] });
+      await refreshConversations();
+      setActive(conversation);
+      setDialog("");
+      setMemberMenuId(null);
+    } catch (err) { setError(err.response?.data?.error || "Could not open private chat."); }
+  }
+
+  async function updateNickname(memberId) {
+    const current = active?.memberNicknames?.[memberId] || "";
+    const nickname = window.prompt("Set a group nickname (leave blank to clear)", current);
+    if (nickname === null) return;
+    try {
+      const updated = await setMemberNickname(activeId, memberId, nickname);
+      setActive(updated);
+      await refreshConversations();
+      setMemberMenuId(null);
+    } catch (err) { setError(err.response?.data?.error || "Could not update nickname."); }
+  }
+
+  function startReply(message) {
+    setReplyTo(message);
+    setMenuMessageId(null);
+    setSelectedMedia(null);
+    requestAnimationFrame(() => document.querySelector(".composer input[aria-label='Write a message']")?.focus());
+  }
+
   const groupMembers = active?.participants || [];
   const groupAdmins = active?.admins || [];
   const filteredGroupMessages = messages.filter((m) => (m.text || "").toLowerCase().includes(groupSearch.toLowerCase()));
@@ -357,7 +402,6 @@ export default function Chat({ user, token, onLogout }) {
       <div className="side-actions">
         <button className="new-chat-button" onClick={() => setDialog("direct")}>＋ New private chat</button>
         <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>
-        <button className="new-group-button settings-launch" onClick={() => { setDialog("settings"); setQuery(""); }}>⚙ Settings</button>
       </div>
       <div className="side-label">PUBLIC SPACE</div>
       <button className={`conversation-item ${activeId === conversations[0]?._id ? "selected" : ""}`} onClick={() => setActive(conversations[0])}>
@@ -374,7 +418,7 @@ export default function Chat({ user, token, onLogout }) {
       {grouped.group.map((c) => <button key={c._id} className={`conversation-item ${activeId === c._id ? "selected" : ""}`} onClick={() => setActive(c)}>
         <span className="conversation-avatar group-avatar">✣</span><span className="conversation-copy"><b>{c.title}</b><small>{c.participants?.length || 0} members</small></span>
       </button>)}
-      <div className="sidebar-foot"><span className={online ? "online-indicator" : "offline-indicator"}/>{online ? "Secure connection active" : "Reconnecting…"}</div>
+      <button className="sidebar-settings" onClick={() => { setDialog("settings"); setQuery(""); }} title="Settings"><span>⚙</span><b>Settings</b></button>
     </aside>
 
     <section className="pulse-main">
@@ -399,16 +443,23 @@ export default function Chat({ user, token, onLogout }) {
             const delivered = (m.deliveredTo || []).length > 0;
             const seen = (m.readBy || []).some((id) => String(id._id || id) !== user.id);
             const filename = m.attachment?.name || "Attachment";
-            return <article key={m._id} className={`message-line ${own ? "mine" : ""}`}>
+            return <article id={"message-" + m._id} key={m._id} className={`message-line ${own ? "mine" : ""}`}>
               {!own && <span className="message-avatar">{m.sender?.name?.[0]?.toUpperCase() || "U"}</span>}
               <div className="message-content">
                 {!own && <span className="message-sender">{m.sender?.name || m.sender?.username}</span>}
                 <div className="message-bubble">
                   {m.deletedForEveryone ? <i className="deleted-message">This message was deleted</i> : <>
+                    {m.replyTo && <button className="reply-quote" onClick={() => document.getElementById("message-" + m.replyTo._id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                      <b>{m.replyTo.sender?.name || "Reply"}</b><span>{m.replyTo.deletedForEveryone ? "This message was deleted" : m.replyTo.text || m.replyTo.attachment?.name || "Media"}</span>
+                    </button>}
                     {m.text && <p>{m.text}</p>}
-                    {m.attachment && mediaUrls[m._id] && (m.attachment.mimeType.startsWith("image/")
-                      ? <img className="chat-image" src={mediaUrls[m._id]} alt={filename} />
-                      : <video className="chat-video" src={mediaUrls[m._id]} controls preload="metadata" />)}
+                    {m.attachment && mediaUrls[m._id] && <div className="message-media-wrap">
+                      {m.attachment.mimeType.startsWith("image/")
+                        ? <img className="chat-image" src={mediaUrls[m._id]} alt={filename} onClick={() => setSelectedMedia(m)} />
+                        : <video className="chat-video" src={mediaUrls[m._id]} controls preload="metadata" />}
+                      <button className="media-save-button" onClick={() => saveAttachment(m)} title="Save media" aria-label="Save media">↓</button>
+                      <button className="media-expand-button" onClick={() => setSelectedMedia(m)} title="View media" aria-label="View media">⛶</button>
+                    </div>}
                     {m.attachment && <small className="attachment-name">{filename}</small>}
                   </>}
                 </div>
@@ -418,6 +469,8 @@ export default function Chat({ user, token, onLogout }) {
                   {!m.deletedForEveryone && <div className="message-actions">
                     <button className="message-menu-trigger" onClick={() => setMenuMessageId(menuMessageId === m._id ? null : m._id)} aria-label="Message options">⋯</button>
                     {menuMessageId === m._id && <div className="message-menu">
+                      <button onClick={() => startReply(m)}>↩ Reply</button>
+                      {m.attachment && <button onClick={() => saveAttachment(m)}>↓ Save media</button>}
                       <button onClick={() => handleDelete(m, "me")}>Delete for me</button>
                       {own && <button className="danger-action" onClick={() => handleDelete(m, "everyone")}>Delete for everyone</button>}
                     </div>}
@@ -431,6 +484,7 @@ export default function Chat({ user, token, onLogout }) {
       </div>
       {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
       <form className="composer" onSubmit={sendMessage}>
+        {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" onChange={handleFile}/>
         <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo or video">{uploading ? "…" : "＋"}</button>
         <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
@@ -450,6 +504,7 @@ export default function Chat({ user, token, onLogout }) {
       }}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><span className="person-check">{selectedUsers.includes(person.id) ? "✓" : dialog === "direct" ? "→" : "+"}</span></button>)}
       {query.length >= 2 && users.length === 0 && <p className="no-results">No matching users found.</p>}</div>
       {dialog === "group" && <button className="modal-submit" disabled={busy || selectedUsers.length === 0 || !groupName.trim()} onClick={createGroup}>{busy ? "Working…" : `Create group · ${selectedUsers.length}`}</button>}
+      {dialog === "members" && <button className="modal-submit" disabled={busy || selectedUsers.length === 0} onClick={addMembers}>{busy ? "Adding…" : `Add selected · ${selectedUsers.length}`}</button>}
     </section></div>}
 
     {dialog === "group-settings" && active?.type === "group" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal group-settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -457,24 +512,39 @@ export default function Chat({ user, token, onLogout }) {
       <span className="eyebrow">GROUP MANAGEMENT</span><h2>{active.title}</h2>
       <div className="group-settings-actions">
         {isAdmin && <button onClick={saveGroupName}>✎ Rename group</button>}
+        {isAdmin && <button onClick={() => { setDialog("members"); setQuery(""); setSelectedUsers([]); }}>＋ Add member</button>}
         <button onClick={() => setGroupMediaTab("media")}>▧ Group media ({groupMedia.length})</button>
         <button onClick={() => setGroupMediaTab("search")}>⌕ Search messages</button>
       </div>
       {groupMediaTab === "search" && <input className="modal-input" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>}
       {groupMediaTab === "search" && <div className="group-media-grid">{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
-      {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img key={m._id} src={mediaUrls[m._id]} alt={m.attachment.name}/> : <video key={m._id} src={mediaUrls[m._id]} controls/>) : <span key={m._id}>{m.attachment.name}</span>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
+      {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => <button className="group-media-item" key={m._id} onClick={() => setSelectedMedia(m)}>{mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img src={mediaUrls[m._id]} alt={m.attachment.name}/> : <video src={mediaUrls[m._id]} muted preload="metadata"/>) : <span>{m.attachment.name}</span>}<small>{m.attachment.name}</small></button>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
       <div className="group-member-heading">Members · {groupMembers.length}</div>
       <div className="group-member-list">{groupMembers.map((member) => {
         const memberId = String(member._id || member.id);
         const admin = groupAdmins.some((a) => String(a._id || a) === memberId);
         const self = memberId === user.id;
         return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
-          {isAdmin && !self && <div className="member-controls"><button onClick={() => changeAdmin(memberId, admin ? "demote" : "promote")}>{admin ? "Remove admin" : "Make admin"}</button><button className="danger-action" onClick={() => kickMember(memberId)}>Remove</button></div>}
+          <div className="member-controls"><button className="member-more-button" onClick={() => setMemberMenuId(memberMenuId === memberId ? null : memberId)} aria-label={"Actions for " + member.name}>⋯</button>
+            {memberMenuId === memberId && <div className="member-action-menu">
+              <button onClick={() => openPrivateMessage(member)}>✉ Send message privately</button>
+              {isAdmin && !self && <button onClick={() => changeAdmin(memberId, admin ? "demote" : "promote")}>{admin ? "♙ Remove admin" : "♟ Make admin"}</button>}
+              {isAdmin && !self && <button onClick={() => updateNickname(memberId)}>✎ Add nickname</button>}
+              {isAdmin && !self && <button className="danger-action" onClick={() => kickMember(memberId)}>✕ Remove member</button>}
+            </div>}
+          </div>
         </div>;
       })}</div>
       <button className="leave-group-button" disabled={isOnlyAdmin} onClick={exitGroup}>{isOnlyAdmin ? "Promote another admin before leaving" : "Exit group"}</button>
     </section></div>}
 
+    {selectedMedia && mediaUrls[selectedMedia._id] && <div className="media-viewer-backdrop" onClick={() => setSelectedMedia(null)}>
+      <section className="media-viewer" onClick={(e) => e.stopPropagation()}>
+        <header><span>{selectedMedia.attachment?.name || "Media"}</span><button onClick={() => setSelectedMedia(null)}>×</button></header>
+        {selectedMedia.attachment?.mimeType.startsWith("image/") ? <img src={mediaUrls[selectedMedia._id]} alt={selectedMedia.attachment.name}/> : <video src={mediaUrls[selectedMedia._id]} controls autoPlay/>}
+        <footer><button onClick={() => saveAttachment(selectedMedia)}>↓ Save media</button><button onClick={() => startReply(selectedMedia)}>↩ Reply</button><button className="danger-action" onClick={() => handleDelete(selectedMedia, "me")}>Delete for me</button>{(String(selectedMedia.sender?._id || selectedMedia.sender) === user.id || (active?.type === "group" && isAdmin)) && <button className="danger-action" onClick={() => handleDelete(selectedMedia, "everyone")}>Delete for everyone</button>}</footer>
+      </section>
+    </div>}
     {dialog === "settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal settings-modal" onClick={(e) => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setDialog("")}>×</button><span className="eyebrow">PULSECHAT PREFERENCES</span><h2>Settings & privacy</h2>
       <div className="setting-row"><span><b>Read receipts</b><small>Allow others to know when you have read their messages.</small></span><input type="checkbox" checked={settings.readReceiptsEnabled} onChange={(e) => toggleReadReceipts(e.target.checked)}/></div>
