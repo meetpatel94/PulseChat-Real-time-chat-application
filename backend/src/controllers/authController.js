@@ -83,13 +83,13 @@ async function me(req, res, next) {
 async function searchUsers(req, res, next) {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 40) : "";
-    if (q.length < 2) return res.json({ success: true, users: [] });
-    const escapedQuery = q.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\    const users = await User.find({");
+    const safeQuery = q.replace(/[^a-zA-Z0-9_ ]/g, "");
+    if (safeQuery.length < 2) return res.json({ success: true, users: [] });
     const users = await User.find({
       _id: { $ne: req.auth.userId }, isActive: true,
       $or: [
-        { username: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
-        { name: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+        { username: { $regex: safeQuery, $options: "i" } },
+        { name: { $regex: safeQuery, $options: "i" } },
       ],
     }).select("name username avatarUrl bio").limit(20).lean();
     return res.json({ success: true, users: users.map(u => ({
