@@ -1,30 +1,13 @@
 const mongoose = require("mongoose");
 
-const messageSchema = new mongoose.Schema(
-  {
-    username: {
-      type: String,
-      required: [true, "username is required"],
-      trim: true,
-      minlength: [1, "username cannot be empty"],
-      maxlength: [30, "username must be at most 30 characters"],
-    },
-    text: {
-      type: String,
-      required: [true, "text is required"],
-      trim: true,
-      minlength: [1, "text cannot be empty"],
-      maxlength: [1000, "text must be at most 1000 characters"],
-    },
-    status: {
-      type: String,
-      enum: ["sent", "delivered"],
-      default: "sent",
-    },
-  },
-  {
-    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
-  }
-);
+const messageSchema = new mongoose.Schema({
+  conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  text: { type: String, required: true, trim: true, minlength: 1, maxlength: 4000 },
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  editedAt: { type: Date, default: null },
+  deletedAt: { type: Date, default: null },
+}, { timestamps: true });
 
+messageSchema.index({ conversation: 1, createdAt: -1 });
 module.exports = mongoose.model("Message", messageSchema);
