@@ -498,8 +498,8 @@ export default function Chat({ user, token, onLogout }) {
 
     {dialog && dialog !== "settings" && dialog !== "group-settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal" onClick={(e) => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setDialog("")}>×</button>
-      <span className="eyebrow">{dialog === "group" ? "BUILD YOUR CIRCLE" : "START A CONVERSATION"}</span>
-      <h2>{dialog === "group" ? "Create a group" : "Find someone"}</h2>
+      <span className="eyebrow">{dialog === "group" ? "BUILD YOUR CIRCLE" : dialog === "members" ? "GROUP MEMBERS" : "START A CONVERSATION"}</span>
+      <h2>{dialog === "group" ? "Create a group" : dialog === "members" ? "Add members" : "Find someone"}</h2>
       {dialog === "group" && <input className="modal-input" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name"/>}
       <input className="modal-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search people by name or username…"/>
       <div className="people-results">{users.map((person) => <button key={person.id} className="person-result" onClick={() => {
