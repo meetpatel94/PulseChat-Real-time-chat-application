@@ -42,3 +42,5 @@ export async function updateGroup(id, payload) { return (await api.patch(`/conve
 export async function setGroupAdmin(id, userId, action = "promote") { return (await api.patch(`/conversations/${id}/admin`, { userId, action })).data.conversation; }
 export async function removeGroupMember(id, userId) { return (await api.delete(`/conversations/${id}/members/${userId}`)).data.conversation; }
 export async function leaveGroup(id) { return (await api.post(`/conversations/${id}/leave`)).data; }
+
+export async function setMemberNickname(id, userId, nickname) { return (await api.patch(`/conversations/${id}/members/${userId}/nickname`, { nickname })).data.conversation; }
