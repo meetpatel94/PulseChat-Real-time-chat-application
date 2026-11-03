@@ -84,6 +84,8 @@ async function addMembers(req, res, next) {
         userIds.some((id) => !mongoose.isValidObjectId(id)))
       return res.status(400).json({ success: false, error: "Invalid member list" });
     const unique = [...new Set(userIds.map(String))];
+    const validUsers = await User.countDocuments({ _id: { $in: unique }, isActive: true });
+    if (validUsers !== unique.length) return res.status(400).json({ success: false, error: "One or more users do not exist" });
     conversation.participants.addToSet(...unique);
     await conversation.save();
     const populated = await Conversation.findById(conversation._id).populate("participants", "name username avatarUrl");
