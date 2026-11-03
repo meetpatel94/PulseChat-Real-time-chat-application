@@ -82,8 +82,17 @@ export default function Chat({ user, token, onLogout }) {
       }
       refreshConversations().catch(() => {});
     };
+    const onRead = ({ conversationId, userId: readerId } = {}) => {
+      if (String(conversationId) !== String(activeId)) return;
+      setMessages((prev) => prev.map((message) => ({
+        ...message,
+        readBy: readerId && !message.readBy?.some((id) => String(id._id || id) === String(readerId))
+          ? [...(message.readBy || []), readerId] : message.readBy,
+      })));
+    };
     socket.on("message:new", receive);
-    return () => socket.off("message:new", receive);
+    socket.on("messages:read", onRead);
+    return () => { socket.off("message:new", receive); socket.off("messages:read", onRead); };
   }, [activeId, refreshConversations, user.id]);
 
   useEffect(() => {
