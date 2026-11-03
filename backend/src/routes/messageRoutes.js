@@ -1,16 +1,8 @@
 const express = require("express");
-const {
-  getMessages,
-  createMessage,
-  deleteMessage,
-  clearMessages,
-} = require("../controllers/messageController");
-
+const requireAuth = require("../middleware/requireAuth");
+const { createMessage, markRead } = require("../controllers/messageController");
 const router = express.Router();
-
-router.get("/", getMessages);
-router.post("/", createMessage);
-router.delete("/", clearMessages);
-router.delete("/:id", deleteMessage);
-
+router.use(requireAuth);
+router.post("/:conversationId", createMessage);
+router.post("/:conversationId/read", markRead);
 module.exports = router;
