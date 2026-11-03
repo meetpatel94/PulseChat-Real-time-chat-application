@@ -346,3 +346,24 @@ git push -u origin main
 - [ ] Online count updates on join/leave
 - [ ] Refresh preserves history
 - [ ] Screen recording of the two-user demo flow
+
+
+## Account authentication API (foundation)
+
+The `feat/auth-foundation` branch adds registration, login, current-user lookup and authenticated user search under `/api/auth`. Passwords are hashed with Node.js scrypt; JWTs expire after one hour. This API foundation is not yet wired into the current username-only frontend or Socket.IO message flow. The legacy global message endpoints remain a prototype and must not be exposed publicly until the next stage secures messages and sockets with authenticated user identity.
+
+Set `JWT_SECRET` in `backend/.env` to a cryptographically random value of at least 32 characters before using these routes.
+
+- `POST /api/auth/register` — body: `{ name, username, email, password }`
+- `POST /api/auth/login` — body: `{ identity, password }` (identity is username or email)
+- `GET /api/auth/me` — requires `Authorization: Bearer <token>`
+- `GET /api/auth/users?q=<query>` — requires bearer token; returns up to 20 matching users
+
+Example backend environment:
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/pulsechat
+CLIENT_URL=http://localhost:5173
+JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
+```
