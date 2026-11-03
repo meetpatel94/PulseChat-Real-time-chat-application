@@ -98,4 +98,43 @@ async function searchUsers(req, res, next) {
   } catch (err) { return next(err); }
 }
 
-module.exports = { register, login, me, searchUsers };
+
+async function updateProfile(req, res, next) {
+  try {
+    const { name, username, avatarUrl, currentPassword, newPassword } = req.body || {};
+    const user = await User.findById(req.auth.userId).select("+passwordHash");
+    if (!user || !user.isActive) return res.status(404).json({ success: false, error: "Account unavailable" });
+    if (name !== undefined) {
+      if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 60)
+        return res.status(400).json({ success: false, error: "Name must be 2–60 characters" });
+      user.name = name.trim();
+    }
+    if (username !== undefined) {
+      if (typeof username !== "string" || !USERNAME_RE.test(username.trim()))
+        return res.status(400).json({ success: false, error: "Username must be 3–24 characters (letters, numbers, underscore)" });
+      const clean = username.trim().toLowerCase();
+      const exists = await User.findOne({ username: clean, _id: { $ne: user._id } }).lean();
+      if (exists) return res.status(409).json({ success: false, error: "Username is already taken" });
+      user.username = clean;
+    }
+    if (avatarUrl !== undefined) {
+      if (typeof avatarUrl !== "string" || (avatarUrl && (!/^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl) || avatarUrl.length > 1400000)))
+        return res.status(400).json({ success: false, error: "Profile photo must be a PNG, JPG or WebP image under 1 MB" });
+      user.avatarUrl = avatarUrl;
+    }
+    if (newPassword !== undefined && newPassword !== "") {
+      if (typeof currentPassword !== "string" || !(await verifyPassword(currentPassword, user.passwordHash)))
+        return res.status(401).json({ success: false, error: "Current password is incorrect" });
+      if (typeof newPassword !== "string" || newPassword.length < 8 || newPassword.length > 128)
+        return res.status(400).json({ success: false, error: "New password must be 8–128 characters" });
+      user.passwordHash = await hashPassword(newPassword);
+    }
+    await user.save();
+    return res.json({ success: true, user: publicUser(user) });
+  } catch (err) {
+    if (err && err.code === 11000) return res.status(409).json({ success: false, error: "Username is already taken" });
+    return next(err);
+  }
+}
+
+module.exports = { register, login, me, searchUsers, updateProfile };
