@@ -330,7 +330,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
   async function blockConversationUser(conversation) {
     const other = conversation.participants?.find((person) => String(person._id || person.id) !== user.id);
     if (!other || !window.confirm("Block this user? You can unblock them later in Settings.")) return;
-    try { await blockUser(String(other._id || other.id)); setBlockedUsers(await getBlockedUsers()); setConversations((prev) => prev.filter((item) => String(item._id || item.id) !== String(conversation._id || conversation.id))); if (String(activeId) === String(conversation._id || conversation.id)) { setActive(null); setMessages([]); } setConversationMenuId(null); await refreshConversations(); }
+    try { await blockUser(String(other._id || other.id)); setBlockedUsers(await getBlockedUsers()); setConversations((prev) => prev.filter((item) => String(item._id || item.id) !== String(conversation._id || conversation.id))); if (String(activeId) === String(conversation._id || conversation.id)) { setActive(null); setMessages([]); } setConversationMenuId(null); }
     catch (err) { setError(err.response?.data?.error || "Could not block this account."); }
   }
 
