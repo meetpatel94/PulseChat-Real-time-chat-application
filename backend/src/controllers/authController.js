@@ -84,6 +84,7 @@ async function searchUsers(req, res, next) {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 40) : "";
     if (q.length < 2) return res.json({ success: true, users: [] });
+    const escapedQuery = q.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\    const users = await User.find({");
     const users = await User.find({
       _id: { $ne: req.auth.userId }, isActive: true,
       $or: [
