@@ -27,6 +27,8 @@ async function createMessage(req, res, next) {
     const conversation = await Conversation.findById(req.params.conversationId);
     if (!conversation || !isMember(conversation, req.auth.userId))
       return res.status(404).json({ success: false, error: "Conversation not found" });
+    if (conversation.type === "group" && conversation.onlyAdminsCanMessage && !conversation.admins.some((id) => String(id) === req.auth.userId))
+      return res.status(403).json({ success: false, error: "Only group admins can send messages right now" });
     const message = await Message.create({
       conversation: conversation._id, sender: req.auth.userId,
       text: text.trim(), readBy: [req.auth.userId],
@@ -47,6 +49,7 @@ async function uploadAttachment(req, res, next) {
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !isMember(conversation, req.auth.userId)) return res.status(404).json({ success: false, error: "Conversation not found" });
     if (await isDirectBlocked(conversation, req.auth.userId)) return res.status(403).json({ success: false, error: "Messaging is unavailable because one account has blocked the other" });
+    if (conversation.type === "group" && conversation.onlyAdminsCanMessage && !conversation.admins.some((id) => String(id) === req.auth.userId)) return res.status(403).json({ success: false, error: "Only group admins can send messages right now" });
     const buffer = req.body;
     const mimeType = req.headers["x-file-mime"];
     const originalName = decodeURIComponent(req.headers["x-file-name"] || "attachment").slice(0, 180);
