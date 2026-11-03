@@ -1169,3 +1169,20 @@ input {
 @media(max-width:680px){.pulse-app{grid-template-columns:minmax(0,1fr)}.pulse-sidebar{height:38dvh;min-height:220px;max-height:310px;border-bottom:1px solid #26343b}.pulse-nav-rail{width:58px;flex-basis:58px;padding:10px 4px}.rail-brand{width:36px;height:36px;margin-bottom:7px}.rail-item{width:48px;min-height:43px}.rail-item span{font-size:18px}.rail-item small{font-size:8px}.rail-profile{width:34px;height:34px}.conversation-sidebar-header{padding:10px 12px}.conversation-sidebar-header h2{font-size:19px}.conversation-sidebar-header p{display:none}.new-chat-icon{width:34px;height:34px;flex-basis:34px}.sidebar-search{margin:0 9px 6px;padding:6px 10px}.conversation-sidebar .conversation-item{min-height:56px}.conversation-sidebar .conversation-avatar{width:34px;height:34px;flex-basis:34px}.sidebar-user-strip{display:none}.pulse-main{min-height:0}.room-header{height:58px;padding:0 10px}.room-heading h1{font-size:14px}.room-heading p{font-size:9px}.room-tools .live-pill,.room-tools .offline-pill{display:inline-flex;font-size:9px;padding:4px 7px}.composer{padding:8px;gap:5px}.composer input[aria-label="Write a message"]{min-width:0}.message-feed{padding:12px 8px}}
 @media(max-width:390px){.pulse-nav-rail{width:48px;flex-basis:48px}.rail-item{width:40px}.conversation-sidebar .conversation-copy small{max-width:140px}.room-tools .icon-button:first-child{display:none}}
 @media(prefers-reduced-motion:reduce){.pulse-app,.pulse-nav-rail,.conversation-sidebar,.pulse-main,.message-line,.conversation-item,.modal-backdrop,.people-modal,.media-viewer{animation:none!important}}
+
+
+.room-icon img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.profile-modal .modal-input:focus{border-color:#00a884;box-shadow:0 0 0 3px #00a88422}
+.group-settings-modal .group-profile-heading{padding-bottom:10px;border-bottom:1px solid #34434b}
+.pulse-app[data-theme="light"] .conversation-sidebar{background:#fff;color:#182923}
+.pulse-app[data-theme="light"] .pulse-nav-rail{background:#f0f3f1;border-color:#dce5df}
+.pulse-app[data-theme="light"] .rail-item{color:#52635b}
+.pulse-app[data-theme="light"] .rail-item.active,.pulse-app[data-theme="light"] .rail-item:hover{background:#e3f4ed;color:#087e68}
+.pulse-app[data-theme="light"] .conversation-sidebar-header h2,.pulse-app[data-theme="light"] .conversation-sidebar .conversation-copy b,.pulse-app[data-theme="light"] .sidebar-user-strip b{color:#182923}
+.pulse-app[data-theme="light"] .conversation-sidebar-header p,.pulse-app[data-theme="light"] .conversation-sidebar .conversation-copy small,.pulse-app[data-theme="light"] .sidebar-user-strip small{color:#788780}
+.pulse-app[data-theme="light"] .sidebar-search{background:#f0f3f1;color:#788780}
+.pulse-app[data-theme="light"] .sidebar-search input{color:#182923}
+.pulse-app[data-theme="light"] .conversation-sidebar .conversation-item.selected,.pulse-app[data-theme="light"] .conversation-sidebar .conversation-item:hover{background:#e9f5ef}
+.pulse-app[data-theme="light"] .sidebar-user-strip{background:#f7faf8;border-color:#e1e9e4}
+.pulse-app[data-theme="light"] .sidebar-empty{color:#182923}
+.pulse-app[data-theme="light"] .group-profile-heading small,.pulse-app[data-theme="light"] .group-permission-setting small,.pulse-app[data-theme="light"] .group-readonly-note{color:#788780}
