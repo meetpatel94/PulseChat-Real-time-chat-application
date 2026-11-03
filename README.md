@@ -390,3 +390,31 @@ The React/Vite client and Express/MongoDB backend are being consolidated around 
 ### Security and release status
 
 This is an in-progress foundation, not a security certification or production release. Before public deployment, complete automated integration tests, use HTTPS, review token storage/XSS exposure, add refresh-session rotation and revocation, email verification and password recovery, enforce production CORS/origin allowlists, add abuse controls and monitoring, and perform a security review. Never expose the MongoDB connection string or JWT secret in frontend variables.
+
+
+## Realtime workspace update (November 2026)
+
+The authenticated workspace now includes:
+- Authenticated Socket.IO conversation rooms for global, direct and group chats. Room access is verified against conversation membership before joining.
+- Fixed room-join validation so connected users can actually join authorized rooms and receive new messages without refreshing.
+- Sent, delivered and read receipt metadata. A single check means sent, grey double checks mean delivered to another active participant, and blue double checks mean read.
+- Live typing indicator with animated dots and an idle timeout.
+- Image/video attachments (JPG, PNG, GIF, WebP, MP4, WebM, MOV), up to 25 MB per file. Uploads are authenticated and attachment downloads re-check conversation membership.
+- Per-user message deletion, sender delete-for-everyone, group-admin moderation, and clear-history-for-me.
+- Message history filters messages hidden by the current user.
+
+### Media storage note
+
+For local development, uploaded files are written to `backend/uploads/` (git-ignored). This is not durable or horizontally scalable storage. Before production deployment, migrate uploads to private object storage (for example S3-compatible storage) with short-lived authorized download URLs, malware scanning, and retention controls.
+
+### Run and verify
+
+Run backend and frontend in separate terminals. Register two accounts in separate browser profiles and verify:
+1. Both accounts join the same global room and see messages instantly.
+2. A direct chat and a group chat both deliver messages without a page refresh.
+3. Typing dots appear and disappear after the sender stops typing.
+4. Sent messages show single check, delivered messages grey double check, and read messages blue double check.
+5. Images and videos upload and render only for authenticated conversation members.
+6. Delete for me affects only the current account; delete for everyone affects all room members; clear history affects only the current account.
+
+Automated end-to-end tests and production storage/security hardening remain required before release.
