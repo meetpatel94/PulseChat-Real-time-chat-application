@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addGroupMembers, clearConversationHistory, createConversation, deleteMessage as deleteMessageApi,
   getAttachmentBlob, getConversationMessages, getConversations, getGlobalConversation,
-  markConversationRead, searchUsers, uploadAttachment,
+  markConversationRead, searchUsers, uploadAttachment, getSettings, updateSettings, getBlockedUsers, blockUser, unblockUser,
+  updateGroup, setGroupAdmin, removeGroupMember, leaveGroup,
 } from "../services/api.js";
 import { connectSocket, disconnectSocket, getSocket } from "../services/socket.js";
 
@@ -32,12 +33,17 @@ export default function Chat({ user, token, onLogout }) {
   const [showPalette, setShowPalette] = useState(false);
   const [menuMessageId, setMenuMessageId] = useState(null);
   const [mediaUrls, setMediaUrls] = useState({});
+  const [settings, setSettings] = useState({ readReceiptsEnabled: true });
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [groupSearch, setGroupSearch] = useState("");
+  const [groupMediaTab, setGroupMediaTab] = useState("media");
   const typingTimer = useRef(null);
   const typingActive = useRef(false);
   const fileInput = useRef(null);
 
   const activeId = active?._id || active?.id;
   const isAdmin = active?.admins?.some((a) => String(a._id || a) === user.id);
+  const isOnlyAdmin = isAdmin && (active?.admins?.length || 0) === 1;
   const title = active?.type === "global" ? "Global lounge" : active?.type === "group" ? active.title : active?.participants?.find((p) => String(p._id || p.id) !== user.id)?.name || "Private chat";
 
   const refreshConversations = useCallback(async () => {
@@ -84,7 +90,7 @@ export default function Chat({ user, token, onLogout }) {
       .then((rows) => { if (mounted) setMessages(rows); })
       .catch((err) => mounted && setError(err.response?.data?.error || "Could not load messages."));
     // Global rooms also need read receipts; the server authorizes global membership separately.
-    markConversationRead(activeId).catch(() => {});
+    if (settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
     return () => { mounted = false; socket?.off("connect", joinRoom); };
   }, [activeId, active?.type]);
 
@@ -95,7 +101,7 @@ export default function Chat({ user, token, onLogout }) {
       const conversationId = String(message.conversation?._id || message.conversation);
       if (conversationId === String(activeId)) {
         setMessages((prev) => prev.some((m) => String(m._id) === String(message._id)) ? prev : [...prev, message]);
-        if (String(message.sender?._id || message.sender) !== user.id) markConversationRead(activeId).catch(() => {});
+        if (String(message.sender?._id || message.sender) !== user.id && settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
       }
       refreshConversations().catch(() => {});
     };
@@ -143,7 +149,7 @@ export default function Chat({ user, token, onLogout }) {
       socket.off("message:hidden", onHidden);
       socket.off("history:cleared", onHistoryCleared);
     };
-  }, [activeId, refreshConversations, user.id]);
+  }, [activeId, refreshConversations, user.id, settings.readReceiptsEnabled]);
 
   useEffect(() => {
     if (query.trim().length < 2) { setUsers([]); return; }
@@ -269,7 +275,53 @@ export default function Chat({ user, token, onLogout }) {
     } catch (err) { setError(err.response?.data?.error || "Could not clear chat history."); }
   }
 
-  const grouped = useMemo(() => ({
+
+  async function saveGroupName() {
+    const nextName = window.prompt("Enter the new group name", active?.title || "");
+    if (!nextName?.trim() || !activeId) return;
+    try { const updated = await updateGroup(activeId, { title: nextName.trim() }); setActive(updated); await refreshConversations(); }
+    catch (err) { setError(err.response?.data?.error || "Could not update group name."); }
+  }
+
+  async function changeAdmin(memberId, action) {
+    try { const updated = await setGroupAdmin(activeId, memberId, action); setActive(updated); await refreshConversations(); }
+    catch (err) { setError(err.response?.data?.error || "Could not update group admin."); }
+  }
+
+  async function kickMember(memberId) {
+    if (!window.confirm("Remove this member from the group?")) return;
+    try { const updated = await removeGroupMember(activeId, memberId); setActive(updated); await refreshConversations(); }
+    catch (err) { setError(err.response?.data?.error || "Could not remove member."); }
+  }
+
+  async function exitGroup() {
+    if (!window.confirm(isOnlyAdmin ? "Promote another member to admin before leaving." : "Leave this group?")) return;
+    if (isOnlyAdmin) return;
+    try { await leaveGroup(activeId); setDialog(""); await refreshConversations(); setActive(conversations[0]); }
+    catch (err) { setError(err.response?.data?.error || "Could not leave group."); }
+  }
+
+  async function toggleReadReceipts(enabled) {
+    try { const next = await updateSettings({ readReceiptsEnabled: enabled }); setSettings(next); }
+    catch (err) { setError(err.response?.data?.error || "Could not save privacy settings."); }
+  }
+
+  async function handleBlock(personId) {
+    if (!window.confirm("Block this user? They will not be able to start or continue private messages with you.")) return;
+    try { await blockUser(personId); setBlockedUsers(await getBlockedUsers()); setDialog(""); await refreshConversations(); }
+    catch (err) { setError(err.response?.data?.error || "Could not block user."); }
+  }
+
+  async function handleUnblock(personId) {
+    try { await unblockUser(personId); setBlockedUsers(await getBlockedUsers()); }
+    catch (err) { setError(err.response?.data?.error || "Could not unblock user."); }
+  }
+
+  const groupMembers = active?.participants || [];
+  const groupAdmins = active?.admins || [];
+  const filteredGroupMessages = messages.filter((m) => (m.text || "").toLowerCase().includes(groupSearch.toLowerCase()));
+  const groupMedia = messages.filter((m) => m.attachment && !m.deletedForEveryone);
+\n  const grouped = useMemo(() => ({
     direct: conversations.filter((c) => c.type === "direct"),
     group: conversations.filter((c) => c.type === "group"),
   }), [conversations]);
@@ -283,7 +335,7 @@ export default function Chat({ user, token, onLogout }) {
       <div className="profile-row"><div className="profile-avatar">{user.name?.[0]?.toUpperCase() || "U"}</div><div className="profile-meta"><b>{user.name}</b><span>@{user.username}</span></div><button className="text-button" onClick={onLogout}>Log out</button></div>
       <div className="side-actions">
         <button className="new-chat-button" onClick={() => setDialog("direct")}>＋ New private chat</button>
-        <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>
+        <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>\n        <button className="new-group-button settings-launch" onClick={() => setDialog("settings")}>⚙ Settings</button>
       </div>
       <div className="side-label">PUBLIC SPACE</div>
       <button className={`conversation-item ${activeId === conversations[0]?._id ? "selected" : ""}`} onClick={() => setActive(conversations[0])}>
@@ -309,7 +361,7 @@ export default function Chat({ user, token, onLogout }) {
         <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Only conversation members can access this chat"}</p></div>
         <div className="room-tools">
           <button className="icon-button" onClick={handleClearHistory} title="Clear my chat history">⌫</button>
-          {active?.type === "group" && isAdmin && <button className="icon-button" onClick={() => setDialog("members")} title="Add group members">＋</button>}
+          {active?.type === "group" && <button className="icon-button" onClick={() => { setDialog("group-settings"); setGroupSearch(""); }} title="Group settings">⚙</button>}
           <button className="icon-button" onClick={() => setShowPalette((v) => !v)} title="Customize chat background">◐</button>
           <span className={online ? "live-pill" : "offline-pill"}>{online ? "LIVE" : "OFFLINE"}</span>
         </div>
@@ -317,7 +369,7 @@ export default function Chat({ user, token, onLogout }) {
 
       {showPalette && <div className="theme-popover"><b>Chat background</b><div className="theme-swatches">{THEMES.map((color) => <button key={color} aria-label={`Set chat background ${color}`} style={{ background: color }} onClick={() => setChatTheme(color)}/>)}</div><button className="reset-theme" onClick={() => { const next={...themes}; delete next[activeId]; setThemes(next); localStorage.setItem(THEME_KEY,JSON.stringify(next)); }}>Reset background</button></div>}
       <div className="message-stage" style={{ "--room-wallpaper": themes[activeId] || "var(--chat-wallpaper)" }}>
-        <div className="message-feed">
+        <div className="message-feed">\n          {active?.type === "group" && groupSearch && <div className="group-search-results"><b>Search results</b><input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
           {messages.length === 0 && <div className="empty-room"><div>✧</div><h2>Make the first move.</h2><p>Start the conversation. Good things begin with hello.</p></div>}
           {messages.map((m) => {
             const own = String(m.sender?._id || m.sender) === user.id;
@@ -363,10 +415,10 @@ export default function Chat({ user, token, onLogout }) {
       </form>
     </section>
 
-    {dialog && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal" onClick={(e) => e.stopPropagation()}>
+    {dialog && dialog !== "settings" && dialog !== "group-settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal" onClick={(e) => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setDialog("")}>×</button>
-      <span className="eyebrow">{dialog === "group" ? "BUILD YOUR CIRCLE" : dialog === "members" ? "GROUP SETTINGS" : "START A CONVERSATION"}</span>
-      <h2>{dialog === "group" ? "Create a group" : dialog === "members" ? "Add members" : "Find someone"}</h2>
+      <span className="eyebrow">{dialog === "group" ? "BUILD YOUR CIRCLE" : "START A CONVERSATION"}</span>
+      <h2>{dialog === "group" ? "Create a group" : "Find someone"}</h2>
       {dialog === "group" && <input className="modal-input" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name"/>}
       <input className="modal-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search people by name or username…"/>
       <div className="people-results">{users.map((person) => <button key={person.id} className="person-result" onClick={() => {
@@ -374,7 +426,39 @@ export default function Chat({ user, token, onLogout }) {
         else setSelectedUsers((prev) => prev.includes(person.id) ? prev.filter((id) => id !== person.id) : [...prev, person.id]);
       }}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><span className="person-check">{selectedUsers.includes(person.id) ? "✓" : dialog === "direct" ? "→" : "+"}</span></button>)}
       {query.length >= 2 && users.length === 0 && <p className="no-results">No matching users found.</p>}</div>
-      {dialog !== "direct" && <button className="modal-submit" disabled={busy || selectedUsers.length === 0 || (dialog === "group" && !groupName.trim())} onClick={dialog === "group" ? createGroup : addMembers}>{busy ? "Working…" : dialog === "group" ? `Create group · ${selectedUsers.length}` : `Add selected · ${selectedUsers.length}`}</button>}
+      {dialog === "group" && <button className="modal-submit" disabled={busy || selectedUsers.length === 0 || !groupName.trim()} onClick={createGroup}>{busy ? "Working…" : `Create group · ${selectedUsers.length}`}</button>}
     </section></div>}
-  </main>;
+
+    {dialog === "group-settings" && active?.type === "group" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal group-settings-modal" onClick={(e) => e.stopPropagation()}>
+      <button className="modal-close" onClick={() => setDialog("")}>×</button>
+      <span className="eyebrow">GROUP MANAGEMENT</span><h2>{active.title}</h2>
+      <div className="group-settings-actions">
+        {isAdmin && <button onClick={saveGroupName}>✎ Rename group</button>}
+        <button onClick={() => setGroupMediaTab("media")}>▧ Group media ({groupMedia.length})</button>
+        <button onClick={() => setGroupMediaTab("search")}>⌕ Search messages</button>
+      </div>
+      {groupMediaTab === "search" && <input className="modal-input" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>}
+      {groupMediaTab === "search" && <div className="group-media-grid">{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
+      {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img key={m._id} src={mediaUrls[m._id]} alt={m.attachment.name}/> : <video key={m._id} src={mediaUrls[m._id]} controls/>) : <span key={m._id}>{m.attachment.name}</span>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
+      <div className="group-member-heading">Members · {groupMembers.length}</div>
+      <div className="group-member-list">{groupMembers.map((member) => {
+        const memberId = String(member._id || member.id);
+        const admin = groupAdmins.some((a) => String(a._id || a) === memberId);
+        const self = memberId === user.id;
+        return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
+          {isAdmin && !self && <div className="member-controls"><button onClick={() => changeAdmin(memberId, admin ? "demote" : "promote")}>{admin ? "Remove admin" : "Make admin"}</button><button className="danger-action" onClick={() => kickMember(memberId)}>Remove</button></div>}
+        </div>;
+      })}</div>
+      <button className="leave-group-button" disabled={isOnlyAdmin} onClick={exitGroup}>{isOnlyAdmin ? "Promote another admin before leaving" : "Exit group"}</button>
+    </section></div>}
+
+    {dialog === "settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal settings-modal" onClick={(e) => e.stopPropagation()}>
+      <button className="modal-close" onClick={() => setDialog("")}>×</button><span className="eyebrow">PULSECHAT PREFERENCES</span><h2>Settings & privacy</h2>
+      <div className="setting-row"><span><b>Read receipts</b><small>Allow others to know when you have read their messages.</small></span><input type="checkbox" checked={settings.readReceiptsEnabled} onChange={(e) => toggleReadReceipts(e.target.checked)}/></div>
+      <h3>Blocked accounts</h3><input className="modal-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search someone to block…"/>
+      <div className="people-results">{users.map((person) => <div className="person-result" key={person.id}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><button className="person-check" onClick={() => handleBlock(person.id)}>Block</button></div>)}</div>
+      <div className="group-member-heading">Blocked users · {blockedUsers.length}</div>
+      <div className="people-results">{blockedUsers.map((person) => <div className="person-result" key={person.id}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><button className="person-check" onClick={() => handleUnblock(person.id)}>Unblock</button></div>)}{blockedUsers.length === 0 && <p className="no-results">No blocked users.</p>}</div>
+    </section></div>}
+\n  </main>;
 }
