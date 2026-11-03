@@ -1,113 +1,43 @@
 const mongoose = require("mongoose");
+const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 
-const MAX_MESSAGE_LENGTH = 1000;
-const MAX_USERNAME_LENGTH = 30;
-
-/**
- * GET /api/messages
- * Returns the latest `limit` messages (default 100) sorted chronologically.
- */
-async function getMessages(req, res, next) {
-  try {
-    const rawLimit = Number.parseInt(req.query.limit, 10);
-    const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 100);
-
-    const messages = await Message.find()
-      .sort({ createdAt: 1, _id: 1 })
-      .limit(limit)
-      .lean();
-
-    res.json(messages);
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * POST /api/messages
- * Validates { username, text }, stores the message and returns it.
- */
 async function createMessage(req, res, next) {
   try {
-    const { username, text } = req.body || {};
-
-    const cleanUsername = typeof username === "string" ? username.trim() : "";
-    const cleanText = typeof text === "string" ? text.trim() : "";
-
-    if (!cleanUsername) {
-      return res.status(400).json({ success: false, error: "username is required" });
-    }
-    if (cleanUsername.length > MAX_USERNAME_LENGTH) {
-      return res.status(400).json({
-        success: false,
-        error: `username must be at most ${MAX_USERNAME_LENGTH} characters`,
-      });
-    }
-    if (!cleanText) {
-      return res.status(400).json({
-        success: false,
-        error: "text is required and cannot be empty",
-      });
-    }
-    if (cleanText.length > MAX_MESSAGE_LENGTH) {
-      return res.status(400).json({
-        success: false,
-        error: `text must be at most ${MAX_MESSAGE_LENGTH} characters`,
-      });
-    }
-
+    const { text } = req.body || {};
+    if (typeof text !== "string" || !text.trim() || text.trim().length > 4000)
+      return res.status(400).json({ success: false, error: "Message must contain 1–4000 characters" });
+    if (!mongoose.isValidObjectId(req.params.conversationId))
+      return res.status(400).json({ success: false, error: "Invalid conversation id" });
+    const conversation = await Conversation.findById(req.params.conversationId);
+    if (!conversation || !conversation.participants.some((id) => String(id) === req.auth.userId))
+      return res.status(404).json({ success: false, error: "Conversation not found" });
     const message = await Message.create({
-      username: cleanUsername,
-      text: cleanText,
-      status: "sent",
+      conversation: conversation._id, sender: req.auth.userId,
+      text: text.trim(), readBy: [req.auth.userId],
     });
-
-    res.status(201).json({ success: true, message });
-  } catch (err) {
-    next(err);
-  }
+    conversation.lastMessageAt = message.createdAt;
+    await conversation.save();
+    const populated = await Message.findById(message._id).populate("sender", "name username avatarUrl");
+    req.app.get("io")?.to(String(conversation._id)).emit("message:new", populated);
+    res.status(201).json({ success: true, message: populated });
+  } catch (err) { next(err); }
 }
 
-/**
- * DELETE /api/messages/:id
- * Removes a single message by id.
- */
-async function deleteMessage(req, res, next) {
+async function markRead(req, res, next) {
   try {
-    const { id } = req.params;
-
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ success: false, error: "Invalid message id" });
-    }
-
-    const message = await Message.findByIdAndDelete(id);
-    if (!message) {
-      return res.status(404).json({ success: false, error: "Message not found" });
-    }
-
+    const conversation = await Conversation.findById(req.params.conversationId).select("participants");
+    if (!conversation || !conversation.participants.some((id) => String(id) === req.auth.userId))
+      return res.status(404).json({ success: false, error: "Conversation not found" });
+    await Message.updateMany(
+      { conversation: conversation._id, sender: { $ne: req.auth.userId }, readBy: { $ne: req.auth.userId } },
+      { $addToSet: { readBy: req.auth.userId } }
+    );
+    req.app.get("io")?.to(String(conversation._id)).emit("messages:read", {
+      conversationId: String(conversation._id), userId: req.auth.userId,
+    });
     res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 }
 
-/**
- * DELETE /api/messages
- * Clears the entire chat, then broadcasts `chat_cleared` so every
- * connected client empties its message list in real time.
- */
-async function clearMessages(req, res, next) {
-  try {
-    await Message.deleteMany({});
-
-    const io = req.app.get("io");
-    if (io) io.emit("chat_cleared", {});
-
-    res.json({ success: true });
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = { getMessages, createMessage, deleteMessage, clearMessages };
+module.exports = { createMessage, markRead };
