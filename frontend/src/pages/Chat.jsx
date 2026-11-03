@@ -62,11 +62,13 @@ export default function Chat({ user, token, onLogout }) {
       .then((rows) => { if (mounted) setMessages(rows); })
       .catch((err) => mounted && setError(err.response?.data?.error || "Could not load messages."));
     const socket = getSocket();
-    if (socket?.connected) socket.emit("conversation:join", { conversationId: activeId }, (result) => {
+    const joinRoom = () => socket?.emit("conversation:join", { conversationId: activeId }, (result) => {
       if (!result?.success && mounted) setError(result?.error || "Could not join this chat.");
     });
+    if (socket?.connected) joinRoom();
+    socket?.on("connect", joinRoom);
     if (active.type !== "global") markConversationRead(activeId).catch(() => {});
-    return () => { mounted = false; };
+    return () => { mounted = false; socket?.off("connect", joinRoom); };
   }, [activeId, active?.type]);
 
   useEffect(() => {
@@ -177,7 +179,7 @@ export default function Chat({ user, token, onLogout }) {
     <section className="pulse-main">
       <header className="room-header">
         <div className="room-icon">{active?.type === "group" ? "✣" : active?.type === "global" ? "◎" : "◉"}</div>
-        <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "End-to-end private room access · Members only"}</p></div>
+        <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Only conversation members can access this chat"}</p></div>
         <div className="room-tools">
           {active?.type === "group" && isAdmin && <button className="icon-button" onClick={() => setDialog("members")} title="Add group members">＋</button>}
           <button className="icon-button" onClick={() => setShowPalette((v) => !v)} title="Customize chat background">◐</button>
