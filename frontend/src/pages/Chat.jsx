@@ -151,19 +151,20 @@ export default function Chat({ user, token, onLogout }) {
     return () => clearTimeout(timer);
   }, [query]);
 
+  const mediaUrlCache = useRef({});
   useEffect(() => {
     let alive = true;
-    const urls = {};
-    const attachments = messages.filter((m) => m.attachment?.url && !m.deletedForEveryone);
+    const attachments = messages.filter((m) => m.attachment?.url && !m.deletedForEveryone && !mediaUrlCache.current[m._id]);
     Promise.all(attachments.map(async (message) => {
       const filename = message.attachment.url.split("/").pop();
       try {
         const blob = await getAttachmentBlob(String(message.conversation?._id || message.conversation), filename);
-        if (alive) urls[message._id] = URL.createObjectURL(blob);
+        if (alive) mediaUrlCache.current[message._id] = URL.createObjectURL(blob);
       } catch { /* Keep the message metadata visible if media cannot be fetched. */ }
-    })).then(() => { if (alive) setMediaUrls((prev) => ({ ...prev, ...urls })); });
-    return () => { alive = false; Object.values(urls).forEach(URL.revokeObjectURL); };
+    })).then(() => { if (alive) setMediaUrls({ ...mediaUrlCache.current }); });
+    return () => { alive = false; };
   }, [messages]);
+  useEffect(() => () => Object.values(mediaUrlCache.current).forEach(URL.revokeObjectURL), []);
 
   const toggleMode = () => setMode((old) => { const next = old === "dark" ? "light" : "dark"; localStorage.setItem(MODE_KEY, next); return next; });
   const setChatTheme = (color) => {
