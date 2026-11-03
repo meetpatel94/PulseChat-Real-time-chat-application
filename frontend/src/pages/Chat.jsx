@@ -677,6 +677,17 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
       </div>
       {active?.type === "group" && active.onlyAdminsCanMessage && <div className="group-announcement">Only group admins can send messages right now.</div>}
       {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+      {showStickerPicker && <div className="sticker-picker">
+        <div className="sticker-picker-tabs">
+          <button type="button" className={stickerTab==="emoji"?"active":""} onClick={()=>setStickerTab("emoji")}>Emoji</button>
+          <button type="button" className={stickerTab==="stickers"?"active":""} onClick={()=>setStickerTab("stickers")}>Stickers</button>
+          <button type="button" className={stickerTab==="gif"?"active":""} onClick={()=>setStickerTab("gif")}>GIF</button>
+          <button type="button" className="picker-close" onClick={()=>setShowStickerPicker(false)}><AppIcon name="x" size={15}/></button>
+        </div>
+        {stickerTab==="emoji" && <div className="emoji-grid">{EMOJI_SET.map((emoji)=><button type="button" key={emoji} onClick={()=>appendEmoji(emoji)}>{emoji}</button>)}</div>}
+        {stickerTab==="stickers" && <div className="sticker-grid">{STICKER_SET.map((sticker)=><button type="button" key={sticker} onClick={()=>sendQuickMessage(sticker)}>{sticker}</button>)}</div>}
+        {stickerTab==="gif" && <div className="gif-url-panel"><p>Paste a direct GIF URL to share it in this chat.</p><input value={gifUrl} onChange={(e)=>setGifUrl(e.target.value)} placeholder="https://…/animation.gif"/><button type="button" disabled={!/^https?:\/\//i.test(gifUrl.trim())} onClick={()=>sendQuickMessage(gifUrl)}>Send GIF link</button></div>}
+      </div>}
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
