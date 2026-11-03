@@ -54,6 +54,11 @@ export default function Chat({ user, token, onLogout }) {
   }, []);
 
   useEffect(() => {
+    getSettings().then(setSettings).catch(() => {});
+    getBlockedUsers().then(setBlockedUsers).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     refreshConversations().catch((err) => mounted && setError(err.response?.data?.error || "Could not load conversations."));
     const socket = connectSocket(token);
@@ -68,9 +73,23 @@ export default function Chat({ user, token, onLogout }) {
     socket.on("history:cleared", ({ conversationId } = {}) => {
       if (String(conversationId) === String(activeId)) setMessages([]);
     });
+    socket.on("group:updated", (updated) => {
+      setConversations((prev) => prev.map((item) => String(item._id) === String(updated._id) ? updated : item));
+      setActive((current) => String(current?._id) === String(updated._id) ? updated : current);
+    });
+    const handleGroupExit = ({ conversationId } = {}) => {
+      setConversations((prev) => prev.filter((item) => String(item._id) !== String(conversationId)));
+      setActive((current) => String(current?._id) === String(conversationId) ? null : current);
+      refreshConversations().catch(() => {});
+    };
+    socket.on("group:removed", handleGroupExit);
+    socket.on("group:left", handleGroupExit);
     return () => {
       mounted = false;
       clearTimeout(typingTimer.current);
+      socket.off("group:updated");
+      socket.off("group:removed");
+      socket.off("group:left");
       disconnectSocket();
     };
   }, [token, refreshConversations]);
@@ -92,7 +111,7 @@ export default function Chat({ user, token, onLogout }) {
     // Global rooms also need read receipts; the server authorizes global membership separately.
     if (settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
     return () => { mounted = false; socket?.off("connect", joinRoom); };
-  }, [activeId, active?.type]);
+  }, [activeId, active?.type, settings.readReceiptsEnabled]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -321,7 +340,8 @@ export default function Chat({ user, token, onLogout }) {
   const groupAdmins = active?.admins || [];
   const filteredGroupMessages = messages.filter((m) => (m.text || "").toLowerCase().includes(groupSearch.toLowerCase()));
   const groupMedia = messages.filter((m) => m.attachment && !m.deletedForEveryone);
-\n  const grouped = useMemo(() => ({
+
+  const grouped = useMemo(() => ({
     direct: conversations.filter((c) => c.type === "direct"),
     group: conversations.filter((c) => c.type === "group"),
   }), [conversations]);
@@ -335,7 +355,8 @@ export default function Chat({ user, token, onLogout }) {
       <div className="profile-row"><div className="profile-avatar">{user.name?.[0]?.toUpperCase() || "U"}</div><div className="profile-meta"><b>{user.name}</b><span>@{user.username}</span></div><button className="text-button" onClick={onLogout}>Log out</button></div>
       <div className="side-actions">
         <button className="new-chat-button" onClick={() => setDialog("direct")}>＋ New private chat</button>
-        <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>\n        <button className="new-group-button settings-launch" onClick={() => setDialog("settings")}>⚙ Settings</button>
+        <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>
+        <button className="new-group-button settings-launch" onClick={() => { setDialog("settings"); setQuery(""); }}>⚙ Settings</button>
       </div>
       <div className="side-label">PUBLIC SPACE</div>
       <button className={`conversation-item ${activeId === conversations[0]?._id ? "selected" : ""}`} onClick={() => setActive(conversations[0])}>
@@ -369,7 +390,8 @@ export default function Chat({ user, token, onLogout }) {
 
       {showPalette && <div className="theme-popover"><b>Chat background</b><div className="theme-swatches">{THEMES.map((color) => <button key={color} aria-label={`Set chat background ${color}`} style={{ background: color }} onClick={() => setChatTheme(color)}/>)}</div><button className="reset-theme" onClick={() => { const next={...themes}; delete next[activeId]; setThemes(next); localStorage.setItem(THEME_KEY,JSON.stringify(next)); }}>Reset background</button></div>}
       <div className="message-stage" style={{ "--room-wallpaper": themes[activeId] || "var(--chat-wallpaper)" }}>
-        <div className="message-feed">\n          {active?.type === "group" && groupSearch && <div className="group-search-results"><b>Search results</b><input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
+        <div className="message-feed">
+          {active?.type === "group" && groupSearch && <div className="group-search-results"><b>Search results</b><input value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
           {messages.length === 0 && <div className="empty-room"><div>✧</div><h2>Make the first move.</h2><p>Start the conversation. Good things begin with hello.</p></div>}
           {messages.map((m) => {
             const own = String(m.sender?._id || m.sender) === user.id;
@@ -460,5 +482,6 @@ export default function Chat({ user, token, onLogout }) {
       <div className="group-member-heading">Blocked users · {blockedUsers.length}</div>
       <div className="people-results">{blockedUsers.map((person) => <div className="person-result" key={person.id}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><button className="person-check" onClick={() => handleUnblock(person.id)}>Unblock</button></div>)}{blockedUsers.length === 0 && <p className="no-results">No blocked users.</p>}</div>
     </section></div>}
-\n  </main>;
+
+  </main>;
 }
