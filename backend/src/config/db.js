@@ -7,7 +7,8 @@ mongoose.set("strictQuery", true);
  * Exits the process with a clear message when the connection fails.
  */
 async function connectDB() {
-  const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/pulsechat";
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI is missing. Set it in backend/.env before starting the server.");
   const conn = await mongoose.connect(uri);
   console.log(`✅ MongoDB connected: ${conn.connection.host}/${conn.connection.name}`);
   return conn;
