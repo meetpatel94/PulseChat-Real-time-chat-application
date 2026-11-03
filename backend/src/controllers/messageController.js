@@ -60,7 +60,7 @@ async function uploadAttachment(req, res, next) {
     await fs.writeFile(storedPath, buffer, { flag: "wx" });
     const message = await Message.create({
       conversation: conversation._id, sender: req.auth.userId, text: "",
-      attachment: { url: `/uploads/${filename}`, name: originalName, mimeType, size: buffer.length },
+      attachment: { url: `/api/messages/${conversationId}/attachments/${filename}`, name: originalName, mimeType, size: buffer.length },
       readBy: [req.auth.userId],
     });
     conversation.lastMessageAt = message.createdAt;
@@ -72,6 +72,24 @@ async function uploadAttachment(req, res, next) {
     if (storedPath) await fs.unlink(storedPath).catch(() => {});
     return next(err);
   }
+}
+
+async function getAttachment(req, res, next) {
+  try {
+    const { conversationId, filename } = req.params;
+    if (!mongoose.isValidObjectId(conversationId) || !/^[a-f0-9-]+\\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(filename))
+      return res.status(400).json({ success: false, error: "Invalid attachment" });
+    const conversation = await Conversation.findById(conversationId).select("type participants");
+    if (!conversation || !isMember(conversation, req.auth.userId))
+      return res.status(404).json({ success: false, error: "Attachment not found" });
+    const message = await Message.findOne({ conversation: conversationId, "attachment.url": `/api/messages/${conversationId}/attachments/${filename}` }).select("attachment");
+    if (!message?.attachment) return res.status(404).json({ success: false, error: "Attachment not found" });
+    const filePath = path.join(__dirname, "../../uploads", filename);
+    res.setHeader("Content-Type", message.attachment.mimeType);
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(message.attachment.name)}`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.sendFile(filePath);
+  } catch (err) { next(err); }
 }
 
 async function markRead(req, res, next) {
@@ -131,4 +149,4 @@ async function clearHistory(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { createMessage, uploadAttachment, markRead, deleteMessage, clearHistory };
+module.exports = { createMessage, uploadAttachment, getAttachment, markRead, deleteMessage, clearHistory };
