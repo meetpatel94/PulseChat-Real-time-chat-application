@@ -25,6 +25,8 @@ export default function App() {
     setSession({ token, user });
   };
 
+  const handleUserUpdate = (user) => setSession((current) => current ? { ...current, user } : current);
+
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     setAuthToken(null);
@@ -33,6 +35,6 @@ export default function App() {
 
   if (checking) return <div className="app-loading"><span className="spinner" />Securing your session…</div>;
   return session
-    ? <Chat user={session.user} token={session.token} onLogout={logout} />
+    ? <Chat user={session.user} token={session.token} onUserUpdate={handleUserUpdate} onLogout={logout} />
     : <Login onAuth={handleAuth} />;
 }
