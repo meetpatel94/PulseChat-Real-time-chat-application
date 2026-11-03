@@ -61,7 +61,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     const [global, rows] = await Promise.all([getGlobalConversation(), getConversations()]);
     const merged = [global, ...rows.filter((c) => c.type !== "global")];
     setConversations(merged);
-    setActive((current) => current ? merged.find((c) => String(c._id || c.id) === String(current._id || current.id)) || global : global);
+    setActive((current) => current ? merged.find((c) => String(c._id || c.id) === String(current._id || current.id)) || global : (merged.find((c) => c.type === "direct") || global));
+    setActiveSection((current) => current === "chats" && !merged.some((c) => c.type === "direct") ? "global" : current);
   }, []);
 
   useEffect(() => {
@@ -74,6 +75,10 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     refreshConversations().catch((err) => mounted && setError(err.response?.data?.error || "Could not load conversations."));
     const socket = connectSocket(token);
     socket.on("connect", () => setOnline(true));
+    const handleNetworkOffline = () => setOnline(false);
+    const handleNetworkOnline = () => { if (socket.connected) setOnline(true); else socket.connect(); };
+    window.addEventListener("offline", handleNetworkOffline);
+    window.addEventListener("online", handleNetworkOnline);
     socket.on("disconnect", () => setOnline(false));
     socket.on("connect_error", () => { setOnline(false); setError("Secure realtime connection failed. Please sign in again."); });
     socket.on("presence:update", () => refreshConversations().catch(() => {}));
@@ -101,6 +106,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
       socket.off("group:updated");
       socket.off("group:removed");
       socket.off("group:left");
+      window.removeEventListener("offline", handleNetworkOffline);
+      window.removeEventListener("online", handleNetworkOnline);
       disconnectSocket();
     };
   }, [token, refreshConversations]);
@@ -452,10 +459,10 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     <aside className="pulse-sidebar">
       <nav className="pulse-nav-rail" aria-label="Main navigation">
         <div className="rail-brand" title="PulseChat">ϟ</div>
-        <button className={activeSection === "chats" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("chats")} title="Chats"><span>▤</span><small>Chats</small></button>
-        <button className={activeSection === "groups" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("groups")} title="Groups"><span>♧</span><small>Groups</small></button>
+        <button className={activeSection === "chats" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("chats"); setActive(grouped.direct[0] || null); setQuery(""); }} title="Chats"><span>▤</span><small>Chats</small></button>
+        <button className={activeSection === "groups" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("groups"); setActive(grouped.group[0] || null); setQuery(""); }} title="Groups"><span>♧</span><small>Groups</small></button>
         <button className={activeSection === "global" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("global"); const global = conversations.find((c) => c.type === "global"); if (global) setActive(global); }} title="Global"><span>◎</span><small>Global</small></button>
-        <button className={activeSection === "calls" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("calls")} title="Calls"><span>⌕</span><small>Calls</small></button>
+        <button className={activeSection === "calls" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("calls"); setActive(null); }} title="Calls"><span>⌕</span><small>Calls</small></button>
         <div className="rail-spacer"/>
         <button className="rail-profile" onClick={() => { setProfileDraft({ name: user.name || "", username: user.username || "", currentPassword: "", newPassword: "" }); setProfilePhoto(user.avatarUrl || ""); setProfileOpen(true); }} title="Edit profile">
           {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile"/> : <span>{user.name?.[0]?.toUpperCase() || "U"}</span>}
@@ -615,7 +622,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
         const memberId = String(member._id || member.id);
         const admin = groupAdmins.some((a) => String(a._id || a) === memberId);
         const self = memberId === user.id;
-        return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{active?.memberNicknames?.[memberId] || member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
+        return <div className="group-member-row" key={memberId}><span className="conversation-avatar">{member.avatarUrl ? <img src={member.avatarUrl} alt=""/> : member.name?.[0]?.toUpperCase() || "?"}</span><span><b>{active?.memberNicknames?.[memberId] || member.name}</b><small>@{member.username} {admin ? " · Admin" : ""}</small></span>
           {!self && <div className="member-controls"><button className="member-more-button" onClick={() => setMemberMenuId(memberMenuId === memberId ? null : memberId)} aria-label={"Actions for " + member.name}>⋯</button>
             {memberMenuId === memberId && <div className="member-action-menu">
               <button onClick={() => openPrivateMessage(member)}>✉ Send message privately</button>
