@@ -562,7 +562,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
           {typing[activeId] && <div className="typing-note"><span>{typing[activeId]} is typing</span><span className="typing-dots"><i/><i/><i/></span></div>}
         </div>
       </div>
-      {active?.type === "group" && active.onlyAdminsCanMessage && <div className="group-announcement">Only group admins can send messages right now.</div>}\n      {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+      {active?.type === "group" && active.onlyAdminsCanMessage && <div className="group-announcement">Only group admins can send messages right now.</div>}
+      {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
@@ -597,7 +598,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
         </button>
         <div><h2>{active.title}</h2><small>{groupMembers.length} members · {isAdmin ? "You are an admin" : "Group details"}</small></div>
       </div>
-      {isAdmin && <input ref={groupPhotoInput} className="media-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleGroupPhoto}/>
+      {isAdmin && <input ref={groupPhotoInput} className="media-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleGroupPhoto}/>}
       <div className="group-settings-actions">
         {isAdmin && <button onClick={saveGroupName}>✎ Rename group</button>}
         {isAdmin && <button onClick={() => { setDialog("members"); setQuery(""); setSelectedUsers([]); }}>＋ Add member</button>}
