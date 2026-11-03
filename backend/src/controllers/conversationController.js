@@ -136,7 +136,7 @@ async function updateGroup(req, res, next) {
       group.title = title.trim();
     }
     if (avatarUrl !== undefined) {
-      if (typeof avatarUrl !== "string" || (avatarUrl && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl) || avatarUrl.length > 1400000)))
+      if (typeof avatarUrl !== "string" || (avatarUrl && (!(avatarUrl.startsWith("data:image/png;base64,") || avatarUrl.startsWith("data:image/jpeg;base64,") || avatarUrl.startsWith("data:image/webp;base64,")) || avatarUrl.length > 1400000)))
         return res.status(400).json({ success: false, error: "Group photo must be a PNG, JPG or WebP image under 1 MB" });
       group.avatarUrl = avatarUrl;
     }
