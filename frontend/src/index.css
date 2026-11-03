@@ -1257,3 +1257,12 @@ input {
 .pulse-app[data-theme="light"] .gif-url-panel input{background:#f7faf8;color:#182923;border-color:#dce5df}
 .pulse-app[data-theme="light"] .contact-profile-bio{background:#f0f3f1}
 @media(max-width:760px){.conversation-row-menu-trigger{opacity:1}.sticker-picker{right:10px;bottom:72px}.composer-emoji-button,.composer-tool-button,.send-message-button{width:34px;height:34px;flex-basis:34px}.conversation-context-menu{right:4px}}
+
+
+.inline-gif{display:block;max-width:min(260px,65vw);max-height:220px;object-fit:contain;border-radius:10px;margin-top:5px}
+.room-tools .icon-button{display:grid;place-items:center}
+.conversation-row .conversation-item{background:transparent}
+.conversation-row .conversation-item.selected{background:#202c33}
+.conversation-row .conversation-item:hover{background:#202c33}
+.conversation-row .conversation-row-menu-trigger:focus-visible{opacity:1;outline:2px solid #00a884;outline-offset:2px}
+.profile-modal .profile-bio-input{font:inherit;line-height:1.5}
