@@ -85,7 +85,7 @@ async function uploadAttachment(req, res, next) {
 async function getAttachment(req, res, next) {
   try {
     const { conversationId, filename } = req.params;
-    if (!mongoose.isValidObjectId(conversationId) || !/^[a-f0-9-]+\\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(filename))
+    if (!mongoose.isValidObjectId(conversationId) || !/^[a-f0-9-]+\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(filename))
       return res.status(400).json({ success: false, error: "Invalid attachment" });
     const conversation = await Conversation.findById(conversationId).select("type participants");
     if (!conversation || !isMember(conversation, req.auth.userId))
@@ -111,6 +111,8 @@ async function markRead(req, res, next) {
     const conversation = await Conversation.findById(req.params.conversationId).select("type participants");
     if (!conversation || !isMember(conversation, req.auth.userId))
       return res.status(404).json({ success: false, error: "Conversation not found" });
+    const reader = await User.findById(req.auth.userId).select("readReceiptsEnabled");
+    if (reader?.readReceiptsEnabled === false) return res.json({ success: true, readReceiptsDisabled: true });
     await Message.updateMany(
       { conversation: conversation._id, sender: { $ne: req.auth.userId }, readBy: { $ne: req.auth.userId }, deletedAt: null },
       { $addToSet: { readBy: req.auth.userId, deliveredTo: req.auth.userId } }
