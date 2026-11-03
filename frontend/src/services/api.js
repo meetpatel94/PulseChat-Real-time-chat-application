@@ -32,3 +32,13 @@ export async function deleteMessage(messageId, scope) {
 export async function clearConversationHistory(conversationId) {
   return (await api.delete(`/messages/${conversationId}/history`)).data;
 }
+
+export async function getSettings() { return (await api.get("/settings")).data.settings; }
+export async function updateSettings(payload) { return (await api.patch("/settings", payload)).data.settings; }
+export async function getBlockedUsers() { return (await api.get("/settings/blocked")).data.users; }
+export async function blockUser(userId) { return (await api.post(`/settings/blocked/${userId}`)).data; }
+export async function unblockUser(userId) { return (await api.delete(`/settings/blocked/${userId}`)).data; }
+export async function updateGroup(id, payload) { return (await api.patch(`/conversations/${id}`, payload)).data.conversation; }
+export async function setGroupAdmin(id, userId, action = "promote") { return (await api.patch(`/conversations/${id}/admin`, { userId, action })).data.conversation; }
+export async function removeGroupMember(id, userId) { return (await api.delete(`/conversations/${id}/members/${userId}`)).data.conversation; }
+export async function leaveGroup(id) { return (await api.post(`/conversations/${id}/leave`)).data; }
