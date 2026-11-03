@@ -14,7 +14,7 @@ export async function searchUsers(q) { return (await api.get("/auth/users", { pa
 export async function getConversations() { return (await api.get("/conversations")).data.conversations; }
 export async function getGlobalConversation() { return (await api.get("/conversations/global")).data.conversation; }
 export async function createConversation(payload) { return (await api.post("/conversations", payload)).data.conversation; }
-export async function getConversationMessages(id) { return (await api.get(`/conversations/${id}/messages`)).data.messages; }
+export async function getConversationMessages(id) { return (await api.get(`/conversations/${id}/messages`, { params: { limit: 100 } })).data.messages; }
 export async function markConversationRead(id) { return (await api.post(`/messages/${id}/read`)).data; }
 export async function addGroupMembers(id, userIds) { return (await api.post(`/conversations/${id}/members`, { userIds })).data.conversation; }
 export async function uploadAttachment(conversationId, file) {
