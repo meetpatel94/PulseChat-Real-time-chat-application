@@ -542,20 +542,20 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     <aside className="pulse-sidebar">
       <nav className="pulse-nav-rail" aria-label="Main navigation">
         <div className="rail-brand" title="PulseChat">ϟ</div>
-        <button className={activeSection === "chats" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("chats"); setActive(grouped.direct[0] || null); setQuery(""); }} title="Chats"><span>▤</span><small>Chats</small></button>
-        <button className={activeSection === "groups" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("groups"); setActive(grouped.group[0] || null); setQuery(""); }} title="Groups"><span>♧</span><small>Groups</small></button>
-        <button className={activeSection === "global" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("global"); const global = conversations.find((c) => c.type === "global"); if (global) setActive(global); }} title="Global"><span>◎</span><small>Global</small></button>
-        <button className={activeSection === "calls" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("calls"); setActive(null); }} title="Calls"><span>⌕</span><small>Calls</small></button>
+        <button className={activeSection === "chats" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("chats"); setActive(grouped.direct[0] || null); setQuery(""); }} title="Chats"><AppIcon name="chat"/><small>Chats</small></button>
+        <button className={activeSection === "groups" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("groups"); setActive(grouped.group[0] || null); setQuery(""); }} title="Groups"><AppIcon name="users"/><small>Groups</small></button>
+        <button className={activeSection === "global" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("global"); const global = conversations.find((c) => c.type === "global"); if (global) setActive(global); }} title="Global"><AppIcon name="globe"/><small>Global</small></button>
+        <button className={activeSection === "calls" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("calls"); setActive(null); }} title="Calls"><AppIcon name="phone"/><small>Calls</small></button>
         <div className="rail-spacer"/>
         <button className="rail-profile" onClick={() => { setProfileDraft({ name: user.name || "", username: user.username || "", bio: user.bio || "", currentPassword: "", newPassword: "" }); setProfilePhoto(user.avatarUrl || ""); setProfileOpen(true); }} title="Edit profile">
           {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile"/> : <span>{user.name?.[0]?.toUpperCase() || "U"}</span>}
         </button>
-        <button className="rail-item rail-settings" onClick={() => { setDialog("settings"); setQuery(""); }} title="Settings"><span>⚙</span><small>Settings</small></button>
+        <button className="rail-item rail-settings" onClick={() => { setDialog("settings"); setQuery(""); }} title="Settings"><AppIcon name="settings"/><small>Settings</small></button>
       </nav>
       <section className="conversation-sidebar">
         <header className="conversation-sidebar-header">
           <div><h2>{activeSection === "chats" ? "Chats" : activeSection === "groups" ? "Groups" : activeSection === "global" ? "Global" : "Calls"}</h2><p>{activeSection === "chats" ? "Your private conversations" : activeSection === "groups" ? "Your group conversations" : activeSection === "global" ? "Community space" : "Voice and video calls"}</p></div>
-          <button className="new-chat-icon" onClick={() => { setDialog("direct"); setQuery(""); }} title="New private chat" aria-label="New private chat">＋</button>
+          <button className="new-chat-icon" onClick={() => { setDialog("direct"); setQuery(""); }} title="New private chat" aria-label="New private chat"><AppIcon name="plus" size={22}/></button>
         </header>
         {activeSection !== "calls" && activeSection !== "global" && <label className="sidebar-search"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={activeSection === "groups" ? "Search groups" : "Search chats"}/></label>}
         <div className="conversation-list">
@@ -612,7 +612,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     <section className="pulse-main">
       <header className="room-header">
         <div className="room-icon">{active?.type === "group" && active.avatarUrl ? <img src={active.avatarUrl} alt=""/> : active?.type === "group" ? "✣" : active?.type === "global" ? "◎" : "◉"}</div>
-        <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Only conversation members can access this chat"}</p></div>
+        <button className="room-heading room-heading-button" onClick={() => { if (active?.type === "direct") setContactOpen(true); else if (active?.type === "group") { setDialog("group-settings"); setGroupSearch(""); } }}><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Click to view contact info"}</p></button>
         <div className="room-tools">
           <button className="icon-button" onClick={handleClearHistory} title="Clear my chat history">⌫</button>
           {active?.type === "group" && <button className="icon-button" onClick={() => { setDialog("group-settings"); setGroupSearch(""); }} title="Group settings">⚙</button>}
@@ -640,7 +640,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
                     {m.replyTo && <button className="reply-quote" onClick={() => document.getElementById("message-" + m.replyTo._id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
                       <b>{m.replyTo.sender?.name || "Reply"}</b><span>{m.replyTo.deletedForEveryone ? "This message was deleted" : m.replyTo.text || m.replyTo.attachment?.name || "Media"}</span>
                     </button>}
-                    {m.text && <p>{m.text}</p>}
+                    {m.text && <p className="message-text"><MessageText value={m.text}/></p>}
                     {m.attachment && mediaUrls[m._id] && <div className="message-media-wrap">
                       {m.attachment.mimeType.startsWith("image/")
                         ? <img className="chat-image" src={mediaUrls[m._id]} alt={filename} onClick={() => setSelectedMedia(m)} />
@@ -679,9 +679,9 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
-        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online || !canSend} title="Attach photo, video, audio or document">{uploading ? "…" : "＋"}</button>
-        <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={!canSend ? "Only admins can send messages" : active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} disabled={!canSend} aria-label="Write a message"/>
-        <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online || !canSend}>↑</button>
+        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online || !canSend} title="Attach media"><AppIcon name="paperclip"/></button>
+        <button type="button" className="composer-emoji-button" onClick={() => { setShowStickerPicker((v)=>!v); setStickerTab("emoji"); }} title="Emoji"><AppIcon name="smile"/></button><input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={!canSend ? "Only admins can send messages" : active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} disabled={!canSend} aria-label="Write a message"/>
+        <button type="button" className="composer-tool-button" onClick={() => { setShowStickerPicker((v)=>!v); setStickerTab("emoji"); }} title="Emoji, stickers and GIF"><AppIcon name="sticker"/></button><button type="submit" className="send-message-button" disabled={!text.trim() || !online || !canSend} title="Send message"><AppIcon name="send" size={17}/></button>
       </form>
     </section>
 
@@ -760,7 +760,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
           <input ref={profilePhotoInput} className="media-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleProfilePhoto}/>
           <label className="profile-field">Display name<input className="modal-input" value={profileDraft.name} onChange={(e)=>setProfileDraft((p)=>({...p,name:e.target.value}))} minLength={2} maxLength={60} required/></label>
           <label className="profile-field">Username<input className="modal-input" value={profileDraft.username} onChange={(e)=>setProfileDraft((p)=>({...p,username:e.target.value}))} minLength={3} maxLength={24} pattern="[A-Za-z0-9_]+" required/><small>3–24 letters, numbers or underscores</small></label>
-          <div className="profile-password-heading">Change password <small>Leave blank to keep your current password</small></div>
+          <label className="profile-field">Bio<textarea className="modal-input profile-bio-input" value={profileDraft.bio || ""} onChange={(e)=>setProfileDraft((p)=>({...p,bio:e.target.value}))} maxLength={160} rows={3} placeholder="A little about you…"/><small>{(profileDraft.bio||"").length}/160</small></label>\n          <div className="profile-password-heading">Change password <small>Leave blank to keep your current password</small></div>
           <label className="profile-field">Current password<input className="modal-input" type="password" autoComplete="current-password" value={profileDraft.currentPassword} onChange={(e)=>setProfileDraft((p)=>({...p,currentPassword:e.target.value}))}/></label>
           <label className="profile-field">New password<input className="modal-input" type="password" autoComplete="new-password" minLength={8} maxLength={128} value={profileDraft.newPassword} onChange={(e)=>setProfileDraft((p)=>({...p,newPassword:e.target.value}))}/></label>
           <button className="modal-submit" type="submit" disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
