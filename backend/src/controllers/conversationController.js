@@ -60,7 +60,7 @@ async function getMessages(req, res, next) {
   try {
     if (!mongoose.isValidObjectId(req.params.id))
       return res.status(400).json({ success: false, error: "Invalid conversation id" });
-    const conversation = await Conversation.findById(req.params.id).select("participants");
+    const conversation = await Conversation.findById(req.params.id).select("type participants");
     if (!conversation || (conversation.type !== "global" && !isMember(conversation, req.auth.userId)))
       return res.status(404).json({ success: false, error: "Conversation not found" });
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 100);
