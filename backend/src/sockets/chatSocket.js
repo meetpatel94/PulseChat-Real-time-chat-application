@@ -1,126 +1,72 @@
+const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 
-const MAX_MESSAGE_LENGTH = 1000;
-const MAX_USERNAME_LENGTH = 30;
+const MAX_MESSAGE_LENGTH = 4000;
 
-/**
- * Online users map: username -> Set of socket ids.
- * A user with several tabs/browsers stays "online" while at least
- * one of their sockets is connected.
- */
-const onlineUsers = new Map();
-
-function getOnlineList() {
-  return Array.from(onlineUsers.keys()).sort((a, b) => a.localeCompare(b));
+function isParticipant(conversation, userId) {
+  return conversation.type === "global" ||
+    conversation.participants.some((id) => String(id) === String(userId));
 }
 
-function normalizeUsername(raw) {
-  if (typeof raw !== "string") return null;
-  const name = raw.trim();
-  if (!name || name.length > MAX_USERNAME_LENGTH) return null;
-  return name;
-}
-
-/**
- * Wires all Socket.io event handling onto the given `io` instance.
- *
- * Client -> server events: send_message, typing, stop_typing
- * Server -> client events: receive_message, online_users, typing,
- *                          stop_typing, message_error
- */
 function initializeSocket(io) {
   io.on("connection", (socket) => {
-    const username = normalizeUsername(
-      socket.handshake.auth && socket.handshake.auth.username
-    );
+    const { id: userId, username } = socket.user;
+    socket.join(`user:${userId}`);
+    socket.emit("session:ready", { userId, username });
 
-    if (username) {
-      let sockets = onlineUsers.get(username);
-      if (!sockets) {
-        sockets = new Set();
-        onlineUsers.set(username, sockets);
-      }
-      sockets.add(socket.id);
-      console.log(`🟢 ${username} connected (${socket.id}). Online: ${onlineUsers.size}`);
-      io.emit("online_users", getOnlineList());
-    } else {
-      // No valid username in the handshake — allow the socket (health
-      // checks, probes) but do not track or broadcast for it.
-      console.warn(`⚠️ Socket ${socket.id} connected without a valid username`);
-    }
-
-    /**
-     * send_message — validate, persist to MongoDB, then broadcast the
-     * saved document to every connected client (including the sender).
-     */
-    socket.on("send_message", async (payload) => {
-      if (!username) return;
-
-      const text =
-        payload && typeof payload.text === "string" ? payload.text.trim() : "";
-
-      if (!text) {
-        socket.emit("message_error", { message: "Message cannot be empty" });
-        return;
-      }
-      if (text.length > MAX_MESSAGE_LENGTH) {
-        socket.emit("message_error", {
-          message: `Message must be at most ${MAX_MESSAGE_LENGTH} characters`,
-        });
-        return;
-      }
-
+    socket.on("conversation:join", async ({ conversationId } = {}, ack = () => {}) => {
       try {
-        const created = await Message.create({
-          username,
-          text,
-          status: "sent",
-        });
-
-        // Mark "delivered" when at least one other user is online.
-        const otherUserIds = new Set();
-        onlineUsers.forEach((ids, name) => {
-          if (name !== username) ids.forEach((id) => otherUserIds.add(id));
-        });
-
-        let outgoing = created;
-        if (otherUserIds.size > 0) {
-          outgoing = await Message.findByIdAndUpdate(
-            created._id,
-            { status: "delivered" },
-            { new: true }
-          ).lean();
-        }
-
-        io.emit("receive_message", outgoing);
-      } catch (err) {
-        console.error("Failed to save message:", err.message);
-        socket.emit("message_error", {
-          message: "Failed to save message. Please try again.",
-        });
+        const conversation = await Conversation.findById(conversationId).select("type participants");
+        if (!conversation || !isParticipant(conversation, userId))
+          return ack({ success: false, error: "Conversation not found" });
+        socket.join(`conversation:${conversationId}`);
+        return ack({ success: true });
+      } catch {
+        return ack({ success: false, error: "Could not join conversation" });
       }
     });
 
-    /** Relay typing state to everyone except the typer. */
-    socket.on("typing", () => {
-      if (username) socket.broadcast.emit("typing", { username });
+    socket.on("message:send", async (payload = {}, ack = () => {}) => {
+      try {
+        const { conversationId } = payload;
+        const text = typeof payload.text === "string" ? payload.text.trim() : "";
+        if (!text || text.length > MAX_MESSAGE_LENGTH)
+          return ack({ success: false, error: "Message must contain 1–4000 characters" });
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation || !isParticipant(conversation, userId))
+          return ack({ success: false, error: "Conversation not found" });
+        const message = await Message.create({
+          conversation: conversation._id, sender: userId, text, readBy: [userId],
+        });
+        conversation.lastMessageAt = message.createdAt;
+        await conversation.save();
+        const populated = await Message.findById(message._id)
+          .populate("sender", "name username avatarUrl").lean();
+        io.to(`conversation:${conversationId}`).emit("message:new", populated);
+        return ack({ success: true, message: populated });
+      } catch (error) {
+        return ack({ success: false, error: "Message could not be saved" });
+      }
     });
 
-    socket.on("stop_typing", () => {
-      if (username) socket.broadcast.emit("stop_typing", { username });
+    socket.on("typing:start", async ({ conversationId } = {}) => {
+      if (!socket.rooms.has(`conversation:${conversationId}`)) return;
+      socket.to(`conversation:${conversationId}`).emit("typing:update", {
+        conversationId, userId, username, typing: true,
+      });
+    });
+
+    socket.on("typing:stop", ({ conversationId } = {}) => {
+      if (!socket.rooms.has(`conversation:${conversationId}`)) return;
+      socket.to(`conversation:${conversationId}`).emit("typing:update", {
+        conversationId, userId, username, typing: false,
+      });
     });
 
     socket.on("disconnect", () => {
-      if (!username) return;
-      const sockets = onlineUsers.get(username);
-      if (!sockets) return;
-      sockets.delete(socket.id);
-      if (sockets.size === 0) {
-        onlineUsers.delete(username);
-        console.log(`🔴 ${username} disconnected (${socket.id}). Online: ${onlineUsers.size}`);
-        io.emit("online_users", getOnlineList());
-      }
+      socket.broadcast.emit("presence:update", { userId, username, online: false });
     });
+    socket.broadcast.emit("presence:update", { userId, username, online: true });
   });
 }
 
