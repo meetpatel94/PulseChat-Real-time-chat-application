@@ -101,7 +101,7 @@ async function searchUsers(req, res, next) {
 
 async function updateProfile(req, res, next) {
   try {
-    const { name, username, avatarUrl, currentPassword, newPassword } = req.body || {};
+    const { name, username, avatarUrl, bio, currentPassword, newPassword } = req.body || {};
     const user = await User.findById(req.auth.userId).select("+passwordHash");
     if (!user || !user.isActive) return res.status(404).json({ success: false, error: "Account unavailable" });
     if (name !== undefined) {
@@ -116,6 +116,11 @@ async function updateProfile(req, res, next) {
       const exists = await User.findOne({ username: clean, _id: { $ne: user._id } }).lean();
       if (exists) return res.status(409).json({ success: false, error: "Username is already taken" });
       user.username = clean;
+    }
+    if (bio !== undefined) {
+      if (typeof bio !== "string" || bio.trim().length > 160)
+        return res.status(400).json({ success: false, error: "Bio must be 160 characters or fewer" });
+      user.bio = bio.trim();
     }
     if (avatarUrl !== undefined) {
       if (typeof avatarUrl !== "string" || (avatarUrl && (!(avatarUrl.startsWith("data:image/png;base64,") || avatarUrl.startsWith("data:image/jpeg;base64,") || avatarUrl.startsWith("data:image/webp;base64,")) || avatarUrl.length > 1400000)))
