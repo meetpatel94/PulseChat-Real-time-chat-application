@@ -418,3 +418,17 @@ Run backend and frontend in separate terminals. Register two accounts in separat
 6. Delete for me affects only the current account; delete for everyone affects all room members; clear history affects only the current account.
 
 Automated end-to-end tests and production storage/security hardening remain required before release.
+
+
+## Group controls and privacy settings (November 2026)
+
+The current development branch also includes:
+- Group rename, admin promotion/demotion, member removal and leave-group controls.
+- A group with only one admin cannot be left until another member is promoted.
+- Group media gallery and in-loaded-history message search.
+- User-level read-receipt preference. When disabled, the server does not mark incoming messages as read.
+- Block/unblock controls, with private conversation creation and message delivery denied when either participant has blocked the other.
+- Responsive viewport sizing for reduced-height and mobile windows, theme-aware foreground text, and compact mobile settings access.
+
+### Privacy behavior
+Blocking is currently scoped to direct/private conversations. It does not remove users from shared groups or hide their messages in a group. Group membership and moderation remain controlled by group admins.
