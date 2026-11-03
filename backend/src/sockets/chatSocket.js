@@ -30,8 +30,6 @@ function initializeSocket(io) {
           return ack({ success: false, error: "Conversation not found" });
         if (await isDirectBlocked(conversation))
           return ack({ success: false, error: "Private messaging is blocked between these accounts" });
-        if (conversation.type === "group" && conversation.onlyAdminsCanMessage && !conversation.admins.some((id) => String(id) === userId))
-          return ack({ success: false, error: "Only group admins can send messages right now" });
         const room = `conversation:${conversationId}`;
         await socket.join(room);
         const result = await Message.updateMany(
@@ -56,6 +54,8 @@ function initializeSocket(io) {
           return ack({ success: false, error: "Conversation not found" });
         if (await isDirectBlocked(conversation))
           return ack({ success: false, error: "Private messaging is blocked between these accounts" });
+        if (conversation.type === "group" && conversation.onlyAdminsCanMessage && !conversation.admins.some((id) => String(id) === userId))
+          return ack({ success: false, error: "Only group admins can send messages right now" });
         const room = `conversation:${conversationId}`;
         const roomSockets = io.sockets.adapter.rooms.get(room) || new Set();
         const deliveredTo = new Set();
