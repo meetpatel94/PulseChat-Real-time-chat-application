@@ -118,7 +118,7 @@ async function updateProfile(req, res, next) {
       user.username = clean;
     }
     if (avatarUrl !== undefined) {
-      if (typeof avatarUrl !== "string" || (avatarUrl && (!/^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl) || avatarUrl.length > 1400000)))
+      if (typeof avatarUrl !== "string" || (avatarUrl && (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(avatarUrl) || avatarUrl.length > 1400000)))
         return res.status(400).json({ success: false, error: "Profile photo must be a PNG, JPG or WebP image under 1 MB" });
       user.avatarUrl = avatarUrl;
     }
