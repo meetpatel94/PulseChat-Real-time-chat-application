@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addGroupMembers, clearConversationHistory, createConversation, deleteMessage as deleteMessageApi,
-  getAttachmentBlob, getConversationMessages, getConversations, getGlobalConversation,
+  getAttachmentBlob, getConversationMessages, getConversations, getGlobalConversation, updateProfile,
   markConversationRead, searchUsers, uploadAttachment, getSettings, updateSettings, getBlockedUsers, blockUser, unblockUser,
   updateGroup, setGroupAdmin, removeGroupMember, leaveGroup, setMemberNickname,
 } from "../services/api.js";
@@ -13,7 +13,7 @@ const MODE_KEY = "pulsechat_mode_v2";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const ACCEPTED_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "application/pdf", "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/webm"];
 
-export default function Chat({ user, token, onLogout }) {
+export default function Chat({ user, token, onUserUpdate, onLogout }) {
   const [conversations, setConversations] = useState([]);
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -41,6 +41,13 @@ export default function Chat({ user, token, onLogout }) {
   const [replyTo, setReplyTo] = useState(null);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [memberMenuId, setMemberMenuId] = useState(null);
+  const [activeSection, setActiveSection] = useState("chats");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: user.name || "", username: user.username || "", currentPassword: "", newPassword: "" });
+  const [profilePhoto, setProfilePhoto] = useState(user.avatarUrl || "");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const profilePhotoInput = useRef(null);
+  const groupPhotoInput = useRef(null);
   const typingTimer = useRef(null);
   const typingActive = useRef(false);
   const fileInput = useRef(null);
@@ -48,7 +55,7 @@ export default function Chat({ user, token, onLogout }) {
   const activeId = active?._id || active?.id;
   const isAdmin = active?.admins?.some((a) => String(a._id || a) === user.id);
   const isOnlyAdmin = isAdmin && (active?.admins?.length || 0) === 1;
-  const title = active?.type === "global" ? "Global lounge" : active?.type === "group" ? active.title : active?.participants?.find((p) => String(p._id || p.id) !== user.id)?.name || "Private chat";
+  const title = active?.type === "global" ? "Global Lounge" : active?.type === "group" ? active.title : active?.participants?.find((p) => String(p._id || p.id) !== user.id)?.name || "Private chat";
 
   const refreshConversations = useCallback(async () => {
     const [global, rows] = await Promise.all([getGlobalConversation(), getConversations()]);
@@ -265,7 +272,7 @@ export default function Chat({ user, token, onLogout }) {
     stopTyping();
   }
 
-  async function handleFile(event) {
+  async function handleFile(event) {\n    if (!canSend) { setError("Only group admins can send messages right now."); return; }
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || !activeId) return;
@@ -394,31 +401,51 @@ export default function Chat({ user, token, onLogout }) {
 
   return <main className="pulse-app" data-theme={mode}>
     <aside className="pulse-sidebar">
-      <div className="side-top">
-        <div className="pulse-brand"><span className="brand-symbol">ϟ</span><span>PulseChat</span></div>
-        <button className="icon-button" onClick={toggleMode} title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>{mode === "dark" ? "☀" : "☾"}</button>
-      </div>
-      <div className="profile-row"><div className="profile-avatar">{user.name?.[0]?.toUpperCase() || "U"}</div><div className="profile-meta"><b>{user.name}</b><span>@{user.username}</span></div><button className="text-button" onClick={onLogout}>Log out</button></div>
-      <div className="side-actions">
-        <button className="new-chat-button" onClick={() => setDialog("direct")}>＋ New private chat</button>
-        <button className="new-group-button" onClick={() => setDialog("group")}>＋ Create group</button>
-      </div>
-      <div className="side-label">PUBLIC SPACE</div>
-      <button className={`conversation-item ${activeId === conversations[0]?._id ? "selected" : ""}`} onClick={() => setActive(conversations[0])}>
-        <span className="conversation-avatar global-avatar">◎</span><span className="conversation-copy"><b>Global lounge</b><small>Everyone on PulseChat</small></span><span className="online-indicator"/>
-      </button>
-      <div className="side-label">PRIVATE MESSAGES <span>{grouped.direct.length}</span></div>
-      {grouped.direct.map((c) => {
-        const other = c.participants?.find((p) => String(p._id || p.id) !== user.id);
-        return <button key={c._id} className={`conversation-item ${activeId === c._id ? "selected" : ""}`} onClick={() => setActive(c)}>
-          <span className="conversation-avatar">{other?.name?.[0]?.toUpperCase() || "?"}</span><span className="conversation-copy"><b>{other?.name || "Private chat"}</b><small>@{other?.username || "member"}</small></span>
-        </button>;
-      })}
-      <div className="side-label">GROUPS <span>{grouped.group.length}</span></div>
-      {grouped.group.map((c) => <button key={c._id} className={`conversation-item ${activeId === c._id ? "selected" : ""}`} onClick={() => setActive(c)}>
-        <span className="conversation-avatar group-avatar">✣</span><span className="conversation-copy"><b>{c.title}</b><small>{c.participants?.length || 0} members</small></span>
-      </button>)}
-      <button className="sidebar-settings" onClick={() => { setDialog("settings"); setQuery(""); }} title="Settings"><span>⚙</span><b>Settings</b></button>
+      <nav className="pulse-nav-rail" aria-label="Main navigation">
+        <div className="rail-brand" title="PulseChat">ϟ</div>
+        <button className={activeSection === "chats" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("chats")} title="Chats"><span>▤</span><small>Chats</small></button>
+        <button className={activeSection === "groups" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("groups")} title="Groups"><span>♧</span><small>Groups</small></button>
+        <button className={activeSection === "global" ? "rail-item active" : "rail-item"} onClick={() => { setActiveSection("global"); const global = conversations.find((c) => c.type === "global"); if (global) setActive(global); }} title="Global"><span>◎</span><small>Global</small></button>
+        <button className={activeSection === "calls" ? "rail-item active" : "rail-item"} onClick={() => setActiveSection("calls")} title="Calls"><span>⌕</span><small>Calls</small></button>
+        <div className="rail-spacer"/>
+        <button className="rail-profile" onClick={() => { setProfileDraft({ name: user.name || "", username: user.username || "", currentPassword: "", newPassword: "" }); setProfilePhoto(user.avatarUrl || ""); setProfileOpen(true); }} title="Edit profile">
+          {user.avatarUrl ? <img src={user.avatarUrl} alt="Your profile"/> : <span>{user.name?.[0]?.toUpperCase() || "U"}</span>}
+        </button>
+        <button className="rail-item rail-settings" onClick={() => { setDialog("settings"); setQuery(""); }} title="Settings"><span>⚙</span><small>Settings</small></button>
+      </nav>
+      <section className="conversation-sidebar">
+        <header className="conversation-sidebar-header">
+          <div><h2>{activeSection === "chats" ? "Chats" : activeSection === "groups" ? "Groups" : activeSection === "global" ? "Global" : "Calls"}</h2><p>{activeSection === "chats" ? "Your private conversations" : activeSection === "groups" ? "Your group conversations" : activeSection === "global" ? "Community space" : "Voice and video calls"}</p></div>
+          <button className="new-chat-icon" onClick={() => { setDialog("direct"); setQuery(""); }} title="New private chat" aria-label="New private chat">＋</button>
+        </header>
+        {activeSection !== "calls" && activeSection !== "global" && <label className="sidebar-search"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={activeSection === "groups" ? "Search groups" : "Search chats"}/></label>}
+        <div className="conversation-list">
+          {activeSection === "chats" && grouped.direct.filter((c) => {
+            const other=c.participants?.find((p)=>String(p._id||p.id)!==user.id);
+            return !query.trim() || (other?.name+" "+other?.username).toLowerCase().includes(query.toLowerCase());
+          }).map((c) => {
+            const other=c.participants?.find((p)=>String(p._id||p.id)!==user.id);
+            const last=c.lastMessage;
+            return <button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
+              <span className="conversation-avatar">{other?.avatarUrl?<img src={other.avatarUrl} alt=""/>:other?.name?.[0]?.toUpperCase()||"?"}</span>
+              <span className="conversation-copy"><b>{other?.name||"Private chat"}</b><small>{last?.text || last?.attachment?.name || "@"+(other?.username||"member")}</small></span>
+              <time>{last?.createdAt?new Date(last.createdAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</time>
+            </button>;
+          })}
+          {activeSection === "groups" && grouped.group.filter((c)=>(c.title||"").toLowerCase().includes(query.toLowerCase())).map((c)=><button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
+            <span className="conversation-avatar group-avatar">{c.avatarUrl?<img src={c.avatarUrl} alt=""/>:"✣"}</span><span className="conversation-copy"><b>{c.title}</b><small>{c.lastMessage?.text||c.lastMessage?.attachment?.name||`${c.participants?.length||0} members`}</small></span>
+          </button>)}
+          {activeSection === "global" && conversations.filter((c)=>c.type==="global").map((c)=><button key={c._id} className={activeId===c._id?"conversation-item selected":"conversation-item"} onClick={()=>setActive(c)}>
+            <span className="conversation-avatar global-avatar">◎</span><span className="conversation-copy"><b>Global Lounge</b><small>{c.lastMessage?.text||"Everyone on PulseChat"}</small></span>
+          </button>)}
+          {activeSection === "calls" && <div className="sidebar-empty"><span>☎</span><b>Calls are coming soon</b><small>Your voice and video call history will appear here.</small></div>}
+          {activeSection === "chats" && grouped.direct.length===0 && <div className="sidebar-empty"><span>✉</span><b>No private chats yet</b><small>Start a new conversation with the + button.</small></div>}
+          {activeSection === "groups" && grouped.group.length===0 && <div className="sidebar-empty"><span>♧</span><b>No groups yet</b><small>Create a group to start chatting.</small><button onClick={()=>setDialog("group")}>Create group</button></div>}
+        </div>
+        <div className="sidebar-user-strip" onClick={() => { setProfileDraft({ name:user.name||"",username:user.username||"",currentPassword:"",newPassword:"" }); setProfilePhoto(user.avatarUrl||""); setProfileOpen(true); }}>
+          <span className="conversation-avatar">{user.avatarUrl?<img src={user.avatarUrl} alt=""/>:user.name?.[0]?.toUpperCase()||"U"}</span><span><b>{user.name}</b><small>@{user.username}</small></span><span className="profile-edit-hint">Edit</span>
+        </div>
+      </section>
     </aside>
 
     <section className="pulse-main">
@@ -429,7 +456,7 @@ export default function Chat({ user, token, onLogout }) {
           <button className="icon-button" onClick={handleClearHistory} title="Clear my chat history">⌫</button>
           {active?.type === "group" && <button className="icon-button" onClick={() => { setDialog("group-settings"); setGroupSearch(""); }} title="Group settings">⚙</button>}
           <button className="icon-button" onClick={() => setShowPalette((v) => !v)} title="Customize chat background">◐</button>
-          <span className={online ? "live-pill" : "offline-pill"}>{online ? "LIVE" : "OFFLINE"}</span>
+          <span className={online ? "live-pill" : "offline-pill"}><i className="connection-dot"/>{online ? "ONLINE" : "OFFLINE"}</span>
         </div>
       </header>
 
@@ -486,13 +513,13 @@ export default function Chat({ user, token, onLogout }) {
           {typing[activeId] && <div className="typing-note"><span>{typing[activeId]} is typing</span><span className="typing-dots"><i/><i/><i/></span></div>}
         </div>
       </div>
-      {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
+      {active?.type === "group" && active.onlyAdminsCanMessage && <div className="group-announcement">Only group admins can send messages right now.</div>}\n      {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
-        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo, video, audio or document">{uploading ? "…" : "＋"}</button>
-        <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
-        <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online}>↑</button>
+        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online || !canSend} title="Attach photo, video, audio or document">{uploading ? "…" : "＋"}</button>
+        <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={!canSend ? "Only admins can send messages" : active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} disabled={!canSend} aria-label="Write a message"/>
+        <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online || !canSend}>↑</button>
       </form>
     </section>
 
