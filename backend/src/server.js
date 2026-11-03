@@ -6,6 +6,8 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const connectDB = require("./config/db");
 const { initializeSocket } = require("./sockets/chatSocket");
+const { verifyToken } = require("./utils/auth");
+const User = require("./models/User");
 
 const PORT = process.env.PORT || 5000;
 
@@ -29,7 +31,20 @@ async function main() {
     },
   });
 
-  // 3. Wire up all realtime event handlers
+  // Authenticate every realtime connection; never trust a client-supplied username.
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth && socket.handshake.auth.token;
+      const payload = verifyToken(token);
+      if (!payload) return next(new Error("Unauthorized"));
+      const user = await User.findById(payload.sub).select("_id username isActive");
+      if (!user || !user.isActive) return next(new Error("Unauthorized"));
+      socket.user = { id: String(user._id), username: user.username };
+      return next();
+    } catch (error) { return next(new Error("Unauthorized")); }
+  });
+
+  // 3. Wire up authenticated realtime event handlers
   initializeSocket(io);
 
   // Expose io to Express routes so REST handlers can broadcast
