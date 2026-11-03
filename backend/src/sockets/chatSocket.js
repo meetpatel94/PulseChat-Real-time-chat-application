@@ -28,6 +28,10 @@ function initializeSocket(io) {
         // Membership is checked against MongoDB; do not require the socket to be in the room before joining it.
         if (!conversation || !isParticipant(conversation, userId))
           return ack({ success: false, error: "Conversation not found" });
+        if (await isDirectBlocked(conversation))
+          return ack({ success: false, error: "Private messaging is blocked between these accounts" });
+        if (await isDirectBlocked(conversation))
+          return ack({ success: false, error: "Private messaging is blocked between these accounts" });
         const room = `conversation:${conversationId}`;
         await socket.join(room);
         const result = await Message.updateMany(
@@ -72,8 +76,10 @@ function initializeSocket(io) {
       }
     });
 
-    socket.on("typing:start", ({ conversationId } = {}) => {
+    socket.on("typing:start", async ({ conversationId } = {}) => {
       if (!conversationId || !socket.rooms.has(`conversation:${conversationId}`)) return;
+      const conversation = await Conversation.findById(conversationId).select("type participants");
+      if (!conversation || !isParticipant(conversation, userId) || await isDirectBlocked(conversation)) return;
       socket.to(`conversation:${conversationId}`).emit("typing:update", { conversationId, userId, username, typing: true });
     });
 
