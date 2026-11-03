@@ -16,10 +16,18 @@ function initializeSocket(io) {
 
     socket.on("conversation:join", async ({ conversationId } = {}, ack = () => {}) => {
       try {
+        if (!conversationId) return ack({ success: false, error: "Conversation id is required" });
         const conversation = await Conversation.findById(conversationId).select("type participants");
-        if (!conversation || !isParticipant(conversation, userId) || !socket.rooms.has(`conversation:${conversationId}`))
+        // Membership is checked against MongoDB; do not require the socket to be in the room before joining it.
+        if (!conversation || !isParticipant(conversation, userId))
           return ack({ success: false, error: "Conversation not found" });
-        socket.join(`conversation:${conversationId}`);
+        const room = `conversation:${conversationId}`;
+        await socket.join(room);
+        const result = await Message.updateMany(
+          { conversation: conversationId, sender: { $ne: userId }, deletedAt: null, deliveredTo: { $ne: userId } },
+          { $addToSet: { deliveredTo: userId } }
+        );
+        if (result.modifiedCount) io.to(room).emit("messages:delivered", { conversationId, userId });
         return ack({ success: true });
       } catch {
         return ack({ success: false, error: "Could not join conversation" });
@@ -35,32 +43,36 @@ function initializeSocket(io) {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation || !isParticipant(conversation, userId))
           return ack({ success: false, error: "Conversation not found" });
+        const room = `conversation:${conversationId}`;
+        const roomSockets = io.sockets.adapter.rooms.get(room) || new Set();
+        const deliveredTo = new Set();
+        for (const socketId of roomSockets) {
+          const recipient = io.sockets.sockets.get(socketId);
+          if (recipient?.user?.id && recipient.user.id !== userId) deliveredTo.add(recipient.user.id);
+        }
         const message = await Message.create({
-          conversation: conversation._id, sender: userId, text, readBy: [userId],
+          conversation: conversation._id, sender: userId, text, readBy: [userId], deliveredTo: [...deliveredTo],
         });
         conversation.lastMessageAt = message.createdAt;
         await conversation.save();
         const populated = await Message.findById(message._id)
           .populate("sender", "name username avatarUrl").lean();
-        io.to(`conversation:${conversationId}`).emit("message:new", populated);
+        io.to(room).emit("message:new", populated);
+        if (deliveredTo.size) io.to(room).emit("messages:delivered", { conversationId, userId: null, recipientIds: [...deliveredTo] });
         return ack({ success: true, message: populated });
-      } catch (error) {
+      } catch {
         return ack({ success: false, error: "Message could not be saved" });
       }
     });
 
-    socket.on("typing:start", async ({ conversationId } = {}) => {
-      if (!socket.rooms.has(`conversation:${conversationId}`)) return;
-      socket.to(`conversation:${conversationId}`).emit("typing:update", {
-        conversationId, userId, username, typing: true,
-      });
+    socket.on("typing:start", ({ conversationId } = {}) => {
+      if (!conversationId || !socket.rooms.has(`conversation:${conversationId}`)) return;
+      socket.to(`conversation:${conversationId}`).emit("typing:update", { conversationId, userId, username, typing: true });
     });
 
     socket.on("typing:stop", ({ conversationId } = {}) => {
-      if (!socket.rooms.has(`conversation:${conversationId}`)) return;
-      socket.to(`conversation:${conversationId}`).emit("typing:update", {
-        conversationId, userId, username, typing: false,
-      });
+      if (!conversationId || !socket.rooms.has(`conversation:${conversationId}`)) return;
+      socket.to(`conversation:${conversationId}`).emit("typing:update", { conversationId, userId, username, typing: false });
     });
 
     socket.on("disconnect", () => {
