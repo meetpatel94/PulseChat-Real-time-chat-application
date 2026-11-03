@@ -382,7 +382,7 @@ The React/Vite client and Express/MongoDB backend are being consolidated around 
 ### Updated local setup
 
 1. In `backend/.env`, set `MONGODB_URI`, `CLIENT_URL`, and a cryptographically random `JWT_SECRET` of at least 32 characters.
-2. Run `npm install` in `backend/` to install Express, Mongoose, Socket.IO, Helmet and express-rate-limit.
+2. Run `npm install` in `backend/` to install Express, Mongoose, Socket.IO, dependency-free security headers and an in-memory authentication throttle.
 3. Start backend with `npm run dev`.
 4. Run `npm install` and `npm run dev` in `frontend/`.
 5. Register an account from the sign-in screen. Existing username-only localStorage sessions are not migrated; create an account.
