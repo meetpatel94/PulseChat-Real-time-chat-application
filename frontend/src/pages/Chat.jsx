@@ -240,6 +240,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     try {
       const updated = await updateProfile({ ...profileDraft, avatarUrl: profilePhoto });
       onUserUpdate?.(updated);
+      await refreshConversations();
       setProfileDraft({ name: updated.name, username: updated.username, currentPassword: "", newPassword: "" });
       setProfileOpen(false);
     } catch (err) { setError(err.response?.data?.error || "Could not update your profile."); }
@@ -506,7 +507,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
 
     <section className="pulse-main">
       <header className="room-header">
-        <div className="room-icon">{active?.type === "group" ? "✣" : active?.type === "global" ? "◎" : "◉"}</div>
+        <div className="room-icon">{active?.type === "group" && active.avatarUrl ? <img src={active.avatarUrl} alt=""/> : active?.type === "group" ? "✣" : active?.type === "global" ? "◎" : "◉"}</div>
         <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Only conversation members can access this chat"}</p></div>
         <div className="room-tools">
           <button className="icon-button" onClick={handleClearHistory} title="Clear my chat history">⌫</button>
