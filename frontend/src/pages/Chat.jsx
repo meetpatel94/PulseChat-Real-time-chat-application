@@ -34,6 +34,7 @@ export default function Chat({ user, token, onLogout }) {
   const [menuMessageId, setMenuMessageId] = useState(null);
   const [mediaUrls, setMediaUrls] = useState({});
   const [settings, setSettings] = useState({ readReceiptsEnabled: true });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [groupSearch, setGroupSearch] = useState("");
   const [groupMediaTab, setGroupMediaTab] = useState("media");
@@ -54,7 +55,7 @@ export default function Chat({ user, token, onLogout }) {
   }, []);
 
   useEffect(() => {
-    getSettings().then(setSettings).catch(() => {});
+    getSettings().then((value) => { setSettings(value); setSettingsLoaded(true); }).catch(() => setSettingsLoaded(true));
     getBlockedUsers().then(setBlockedUsers).catch(() => {});
   }, []);
 
@@ -109,9 +110,9 @@ export default function Chat({ user, token, onLogout }) {
       .then((rows) => { if (mounted) setMessages(rows); })
       .catch((err) => mounted && setError(err.response?.data?.error || "Could not load messages."));
     // Global rooms also need read receipts; the server authorizes global membership separately.
-    if (settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
+    if (settingsLoaded && settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
     return () => { mounted = false; socket?.off("connect", joinRoom); };
-  }, [activeId, active?.type, settings.readReceiptsEnabled]);
+  }, [activeId, active?.type, settingsLoaded, settings.readReceiptsEnabled]);
 
   useEffect(() => {
     const socket = getSocket();
@@ -120,7 +121,7 @@ export default function Chat({ user, token, onLogout }) {
       const conversationId = String(message.conversation?._id || message.conversation);
       if (conversationId === String(activeId)) {
         setMessages((prev) => prev.some((m) => String(m._id) === String(message._id)) ? prev : [...prev, message]);
-        if (String(message.sender?._id || message.sender) !== user.id && settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
+        if (String(message.sender?._id || message.sender) !== user.id && settingsLoaded && settings.readReceiptsEnabled) markConversationRead(activeId).catch(() => {});
       }
       refreshConversations().catch(() => {});
     };
@@ -321,7 +322,7 @@ export default function Chat({ user, token, onLogout }) {
   }
 
   async function toggleReadReceipts(enabled) {
-    try { const next = await updateSettings({ readReceiptsEnabled: enabled }); setSettings(next); }
+    try { const next = await updateSettings({ readReceiptsEnabled: enabled }); setSettings(next); setSettingsLoaded(true); }
     catch (err) { setError(err.response?.data?.error || "Could not save privacy settings."); }
   }
 
