@@ -78,7 +78,13 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState({ name: user.name || "", username: user.username || "", bio: user.bio || "", currentPassword: "", newPassword: "" });
   const [profilePhoto, setProfilePhoto] = useState(user.avatarUrl || "");
-  const [profileBusy, setProfileBusy] = useState(false);\n  const [uiScale, setUiScale] = useState(() => Number(localStorage.getItem("pulsechat_ui_scale") || 100));\n  const [conversationMenuId, setConversationMenuId] = useState(null);\n  const [contactOpen, setContactOpen] = useState(false);\n  const [showStickerPicker, setShowStickerPicker] = useState(false);\n  const [stickerTab, setStickerTab] = useState("emoji");\n  const [gifUrl, setGifUrl] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [uiScale, setUiScale] = useState(() => Number(localStorage.getItem("pulsechat_ui_scale") || 100));
+  const [conversationMenuId, setConversationMenuId] = useState(null);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [stickerTab, setStickerTab] = useState("emoji");
+  const [gifUrl, setGifUrl] = useState("");
   const profilePhotoInput = useRef(null);
   const groupPhotoInput = useRef(null);
   const typingTimer = useRef(null);
