@@ -120,8 +120,10 @@ async function deleteMessage(req, res, next) {
     if (!conversation || !isMember(conversation, req.auth.userId))
       return res.status(404).json({ success: false, error: "Message not found" });
     if (scope === "everyone") {
-      if (String(message.sender) !== req.auth.userId)
-        return res.status(403).json({ success: false, error: "You can only delete your own message for everyone" });
+      const isGroupAdmin = conversation.type === "group" &&
+        conversation.admins.some((id) => String(id) === req.auth.userId);
+      if (String(message.sender) !== req.auth.userId && !isGroupAdmin)
+        return res.status(403).json({ success: false, error: "Only the sender or a group admin can delete this message for everyone" });
       message.deletedForEveryone = true;
       message.deletedAt = new Date();
       message.text = "";
