@@ -12,6 +12,7 @@ const messageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   text: { type: String, trim: true, maxlength: 4000, default: "" },
   attachment: { type: attachmentSchema, default: null },
+  replyTo: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   hiddenFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
