@@ -64,7 +64,7 @@ async function getMessages(req, res, next) {
     if (!conversation || (conversation.type !== "global" && !isMember(conversation, req.auth.userId)))
       return res.status(404).json({ success: false, error: "Conversation not found" });
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 100);
-    const messages = await Message.find({ conversation: conversation._id, deletedAt: null })
+    const messages = await Message.find({ conversation: conversation._id, hiddenFor: { $ne: req.auth.userId } })
       .sort({ createdAt: -1 }).limit(limit)
       .populate("sender", "name username avatarUrl").lean();
     res.json({ success: true, messages: messages.reverse() });
