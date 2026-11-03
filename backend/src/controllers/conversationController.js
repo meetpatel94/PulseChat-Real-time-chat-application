@@ -110,13 +110,14 @@ async function getGlobalConversation(req, res, next) {
     if (!conversation) {
       try {
         conversation = await Conversation.create({
-          type: "global", title: "Global Chat", participants: [req.auth.userId], createdBy: req.auth.userId,
+          type: "global", title: "Global Lounge", participants: [req.auth.userId], createdBy: req.auth.userId,
         });
       } catch (error) {
         if (error.code !== 11000) throw error;
         conversation = await Conversation.findOne({ type: "global" });
       }
     }
+    if (conversation && conversation.title !== "Global Lounge") { conversation.title = "Global Lounge"; await conversation.save(); }
     res.json({ success: true, conversation });
   } catch (err) { next(err); }
 }
