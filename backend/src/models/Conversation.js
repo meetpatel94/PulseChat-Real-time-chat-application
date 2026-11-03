@@ -10,5 +10,6 @@ const conversationSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 conversationSchema.index({ participants: 1, lastMessageAt: -1 });
+conversationSchema.index({ type: 1 }, { unique: true, partialFilterExpression: { type: "global" } });
 conversationSchema.index({ type: 1, participants: 1 });
 module.exports = mongoose.model("Conversation", conversationSchema);
