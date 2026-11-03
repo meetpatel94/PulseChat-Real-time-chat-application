@@ -11,7 +11,7 @@ const THEMES = ["#e8f2ee", "#f1e8f6", "#f8eee2", "#e8eef8", "#f7e8eb", "#e9edf0"
 const THEME_KEY = "pulsechat_chat_themes";
 const MODE_KEY = "pulsechat_mode_v2";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const ACCEPTED_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
+const ACCEPTED_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "application/pdf", "audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/webm"];
 
 export default function Chat({ user, token, onLogout }) {
   const [conversations, setConversations] = useState([]);
@@ -456,7 +456,11 @@ export default function Chat({ user, token, onLogout }) {
                     {m.attachment && mediaUrls[m._id] && <div className="message-media-wrap">
                       {m.attachment.mimeType.startsWith("image/")
                         ? <img className="chat-image" src={mediaUrls[m._id]} alt={filename} onClick={() => setSelectedMedia(m)} />
-                        : <video className="chat-video" src={mediaUrls[m._id]} controls preload="metadata" />}
+                        : m.attachment.mimeType.startsWith("video/")
+                          ? <video className="chat-video" src={mediaUrls[m._id]} controls preload="metadata" />
+                          : m.attachment.mimeType.startsWith("audio/")
+                            ? <audio className="chat-audio" src={mediaUrls[m._id]} controls />
+                            : <button className="attachment-file-card" onClick={() => setSelectedMedia(m)}><span>📄</span><b>{filename}</b></button>}
                       <button className="media-save-button" onClick={() => saveAttachment(m)} title="Save media" aria-label="Save media">↓</button>
                       <button className="media-expand-button" onClick={() => setSelectedMedia(m)} title="View media" aria-label="View media">⛶</button>
                     </div>}
@@ -485,7 +489,7 @@ export default function Chat({ user, token, onLogout }) {
       {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
-        <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" onChange={handleFile}/>
+        <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
         <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo or video">{uploading ? "…" : "＋"}</button>
         <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
         <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online}>↑</button>
@@ -518,7 +522,7 @@ export default function Chat({ user, token, onLogout }) {
       </div>
       {groupMediaTab === "search" && <input className="modal-input" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>}
       {groupMediaTab === "search" && <div className="group-media-grid">{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
-      {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => <button className="group-media-item" key={m._id} onClick={() => setSelectedMedia(m)}>{mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img src={mediaUrls[m._id]} alt={m.attachment.name}/> : <video src={mediaUrls[m._id]} muted preload="metadata"/>) : <span>{m.attachment.name}</span>}<small>{m.attachment.name}</small></button>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
+      {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => <button className="group-media-item" key={m._id} onClick={() => setSelectedMedia(m)}>{mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img src={mediaUrls[m._id]} alt={m.attachment.name}/> : m.attachment.mimeType.startsWith("video/") ? <video src={mediaUrls[m._id]} muted preload="metadata"/> : <span className="group-file-icon">{m.attachment.mimeType === "application/pdf" ? "PDF" : "♫"}</span>) : <span>{m.attachment.name}</span>}<small>{m.attachment.name}</small></button>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
       <div className="group-member-heading">Members · {groupMembers.length}</div>
       <div className="group-member-list">{groupMembers.map((member) => {
         const memberId = String(member._id || member.id);
@@ -541,7 +545,7 @@ export default function Chat({ user, token, onLogout }) {
     {selectedMedia && mediaUrls[selectedMedia._id] && <div className="media-viewer-backdrop" onClick={() => setSelectedMedia(null)}>
       <section className="media-viewer" onClick={(e) => e.stopPropagation()}>
         <header><span>{selectedMedia.attachment?.name || "Media"}</span><button onClick={() => setSelectedMedia(null)}>×</button></header>
-        {selectedMedia.attachment?.mimeType.startsWith("image/") ? <img src={mediaUrls[selectedMedia._id]} alt={selectedMedia.attachment.name}/> : <video src={mediaUrls[selectedMedia._id]} controls autoPlay/>}
+        {selectedMedia.attachment?.mimeType.startsWith("image/") ? <img src={mediaUrls[selectedMedia._id]} alt={selectedMedia.attachment.name}/> : selectedMedia.attachment?.mimeType.startsWith("video/") ? <video src={mediaUrls[selectedMedia._id]} controls autoPlay/> : selectedMedia.attachment?.mimeType.startsWith("audio/") ? <audio className="viewer-audio" src={mediaUrls[selectedMedia._id]} controls autoPlay/> : <iframe className="viewer-document" src={mediaUrls[selectedMedia._id]} title={selectedMedia.attachment?.name || "Document preview"}/>
         <footer><button onClick={() => saveAttachment(selectedMedia)}>↓ Save media</button><button onClick={() => startReply(selectedMedia)}>↩ Reply</button><button className="danger-action" onClick={() => handleDelete(selectedMedia, "me")}>Delete for me</button>{(String(selectedMedia.sender?._id || selectedMedia.sender) === user.id || (active?.type === "group" && isAdmin)) && <button className="danger-action" onClick={() => handleDelete(selectedMedia, "everyone")}>Delete for everyone</button>}</footer>
       </section>
     </div>}
