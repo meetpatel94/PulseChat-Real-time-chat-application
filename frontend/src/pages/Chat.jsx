@@ -208,6 +208,55 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     setThemes(next); localStorage.setItem(THEME_KEY, JSON.stringify(next));
   };
 
+  function readImageFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) return reject(new Error("Choose a JPG, PNG or WebP image."));
+      if (file.size > 1024 * 1024) return reject(new Error("Image must be 1 MB or smaller."));
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("Could not read image file."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleProfilePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try { setProfilePhoto(await readImageFile(file)); }
+    catch (err) { setError(err.message); }
+  }
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    setProfileBusy(true); setError("");
+    try {
+      const updated = await updateProfile({ ...profileDraft, avatarUrl: profilePhoto });
+      onUserUpdate?.(updated);
+      setProfileDraft({ name: updated.name, username: updated.username, currentPassword: "", newPassword: "" });
+      setProfileOpen(false);
+    } catch (err) { setError(err.response?.data?.error || "Could not update your profile."); }
+    finally { setProfileBusy(false); }
+  }
+
+  async function handleGroupPhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeId) return;
+    try {
+      const avatarUrl = await readImageFile(file);
+      const updated = await updateGroup(activeId, { avatarUrl });
+      setActive(updated); await refreshConversations();
+    } catch (err) { setError(err.response?.data?.error || err.message || "Could not update group photo."); }
+  }
+
+  async function updateGroupPolicy(onlyAdminsCanMessage) {
+    try {
+      const updated = await updateGroup(activeId, { onlyAdminsCanMessage });
+      setActive(updated); await refreshConversations();
+    } catch (err) { setError(err.response?.data?.error || "Could not update group permissions."); }
+  }
+
   async function startDirect(person) {
     setBusy(true); setError("");
     try {
@@ -540,7 +589,15 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
 
     {dialog === "group-settings" && active?.type === "group" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal group-settings-modal" onClick={(e) => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setDialog("")}>×</button>
-      <span className="eyebrow">GROUP MANAGEMENT</span><h2>{active.title}</h2>
+      <span className="eyebrow">GROUP MANAGEMENT</span>
+      <div className="group-profile-heading">
+        <button className="group-photo-button" onClick={() => isAdmin && groupPhotoInput.current?.click()} title={isAdmin ? "Change group photo" : "Group photo"}>
+          {active.avatarUrl ? <img src={active.avatarUrl} alt="Group"/> : <span>✣</span>}
+          {isAdmin && <i>＋</i>}
+        </button>
+        <div><h2>{active.title}</h2><small>{groupMembers.length} members · {isAdmin ? "You are an admin" : "Group details"}</small></div>
+      </div>
+      {isAdmin && <input ref={groupPhotoInput} className="media-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleGroupPhoto}/>
       <div className="group-settings-actions">
         {isAdmin && <button onClick={saveGroupName}>✎ Rename group</button>}
         {isAdmin && <button onClick={() => { setDialog("members"); setQuery(""); setSelectedUsers([]); }}>＋ Add member</button>}
@@ -550,6 +607,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
       {groupMediaTab === "search" && <input className="modal-input" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} placeholder="Search messages in this group…"/>}
       {groupMediaTab === "search" && <div className="group-media-grid">{filteredGroupMessages.map((m) => <p key={m._id}>{m.sender?.name || "Member"}: {m.text}</p>)}</div>}
       {groupMediaTab === "media" && <div className="group-media-grid">{groupMedia.map((m) => <button className="group-media-item" key={m._id} onClick={() => setSelectedMedia(m)}>{mediaUrls[m._id] ? (m.attachment.mimeType.startsWith("image/") ? <img src={mediaUrls[m._id]} alt={m.attachment.name}/> : m.attachment.mimeType.startsWith("video/") ? <video src={mediaUrls[m._id]} muted preload="metadata"/> : <span className="group-file-icon">{m.attachment.mimeType === "application/pdf" ? "PDF" : "♫"}</span>) : <span>{m.attachment.name}</span>}<small>{m.attachment.name}</small></button>)}{groupMedia.length === 0 && <p className="no-results">No shared media yet.</p>}</div>}
+      {isAdmin && <div className="group-permission-setting"><span><b>Send messages</b><small>{active.onlyAdminsCanMessage ? "Only admins can send messages" : "All members can send messages"}</small></span><label className="toggle-switch"><input type="checkbox" checked={!!active.onlyAdminsCanMessage} onChange={(e) => updateGroupPolicy(e.target.checked)}/><span/></label></div>}
+      {!isAdmin && active.onlyAdminsCanMessage && <p className="group-readonly-note">Only group admins can customize this group and send messages.</p>}
       <div className="group-member-heading">Members · {groupMembers.length}</div>
       <div className="group-member-list">{groupMembers.map((member) => {
         const memberId = String(member._id || member.id);
@@ -574,6 +633,25 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
         <header><span>{selectedMedia.attachment?.name || "Media"}</span><button onClick={() => setSelectedMedia(null)}>×</button></header>
         {selectedMedia.attachment?.mimeType.startsWith("image/") ? <img src={mediaUrls[selectedMedia._id]} alt={selectedMedia.attachment.name}/> : selectedMedia.attachment?.mimeType.startsWith("video/") ? <video src={mediaUrls[selectedMedia._id]} controls autoPlay/> : selectedMedia.attachment?.mimeType.startsWith("audio/") ? <audio className="viewer-audio" src={mediaUrls[selectedMedia._id]} controls autoPlay/> : <iframe className="viewer-document" src={mediaUrls[selectedMedia._id]} title={selectedMedia.attachment?.name || "Document preview"}/>}
         <footer><button onClick={() => saveAttachment(selectedMedia)}>↓ Save media</button><button onClick={() => startReply(selectedMedia)}>↩ Reply</button><button className="danger-action" onClick={() => handleDelete(selectedMedia, "me")}>Delete for me</button>{(String(selectedMedia.sender?._id || selectedMedia.sender) === user.id || (active?.type === "group" && isAdmin)) && <button className="danger-action" onClick={() => handleDelete(selectedMedia, "everyone")}>Delete for everyone</button>}</footer>
+      </section>
+    </div>}
+    {profileOpen && <div className="modal-backdrop profile-modal-backdrop" onClick={() => setProfileOpen(false)}>
+      <section className="people-modal profile-modal" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={() => setProfileOpen(false)}>×</button>
+        <span className="eyebrow">YOUR ACCOUNT</span><h2>Edit profile</h2>
+        <form onSubmit={saveProfile}>
+          <button type="button" className="profile-photo-picker" onClick={() => profilePhotoInput.current?.click()}>
+            {profilePhoto ? <img src={profilePhoto} alt="Profile preview"/> : <span>{profileDraft.name?.[0]?.toUpperCase() || "U"}</span>}
+            <small>Change profile photo</small>
+          </button>
+          <input ref={profilePhotoInput} className="media-file-input" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleProfilePhoto}/>
+          <label className="profile-field">Display name<input className="modal-input" value={profileDraft.name} onChange={(e)=>setProfileDraft((p)=>({...p,name:e.target.value}))} minLength={2} maxLength={60} required/></label>
+          <label className="profile-field">Username<input className="modal-input" value={profileDraft.username} onChange={(e)=>setProfileDraft((p)=>({...p,username:e.target.value}))} minLength={3} maxLength={24} pattern="[A-Za-z0-9_]+" required/><small>3–24 letters, numbers or underscores</small></label>
+          <div className="profile-password-heading">Change password <small>Leave blank to keep your current password</small></div>
+          <label className="profile-field">Current password<input className="modal-input" type="password" autoComplete="current-password" value={profileDraft.currentPassword} onChange={(e)=>setProfileDraft((p)=>({...p,currentPassword:e.target.value}))}/></label>
+          <label className="profile-field">New password<input className="modal-input" type="password" autoComplete="new-password" minLength={8} maxLength={128} value={profileDraft.newPassword} onChange={(e)=>setProfileDraft((p)=>({...p,newPassword:e.target.value}))}/></label>
+          <button className="modal-submit" type="submit" disabled={profileBusy}>{profileBusy ? "Saving…" : "Save profile"}</button>
+        </form>
       </section>
     </div>}
     {dialog === "settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal settings-modal" onClick={(e) => e.stopPropagation()}>
