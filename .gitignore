@@ -28,3 +28,6 @@ yarn-error.log*
 
 # Sandbox-only preview database (PGlite)
 .preview/
+
+# Locally stored private chat uploads (use object storage in production)
+backend/uploads/

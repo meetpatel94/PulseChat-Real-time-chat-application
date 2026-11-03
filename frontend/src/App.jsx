@@ -1,29 +1,40 @@
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Chat from "./pages/Chat.jsx";
+import { getCurrentUser, setAuthToken } from "./services/api.js";
 
-const STORAGE_KEY = "pulsechat_username";
+const TOKEN_KEY = "pulsechat_token";
 
 export default function App() {
-  const [username, setUsername] = useState(
-    () => window.localStorage.getItem(STORAGE_KEY) || ""
-  );
+  const [session, setSession] = useState(null);
+  const [checking, setChecking] = useState(true);
 
-  const handleLogin = useCallback((name) => {
-    const clean = name.trim();
-    if (!clean) return;
-    window.localStorage.setItem(STORAGE_KEY, clean);
-    setUsername(clean);
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) { setChecking(false); return; }
+    setAuthToken(token);
+    getCurrentUser()
+      .then((user) => setSession({ token, user }))
+      .catch(() => { localStorage.removeItem(TOKEN_KEY); setAuthToken(null); })
+      .finally(() => setChecking(false));
   }, []);
 
-  const handleLogout = useCallback(() => {
-    window.localStorage.removeItem(STORAGE_KEY);
-    setUsername("");
-  }, []);
+  const handleAuth = ({ token, user }) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    setAuthToken(token);
+    setSession({ token, user });
+  };
 
-  return username ? (
-    <Chat username={username} onLogout={handleLogout} />
-  ) : (
-    <Login onLogin={handleLogin} />
-  );
+  const handleUserUpdate = (user) => setSession((current) => current ? { ...current, user } : current);
+
+  const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    setAuthToken(null);
+    setSession(null);
+  };
+
+  if (checking) return <div className="app-loading"><span className="spinner" />Securing your session…</div>;
+  return session
+    ? <Chat user={session.user} token={session.token} onUserUpdate={handleUserUpdate} onLogout={logout} />
+    : <Login onAuth={handleAuth} />;
 }

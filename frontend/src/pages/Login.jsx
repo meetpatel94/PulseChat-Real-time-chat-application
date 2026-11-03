@@ -1,81 +1,44 @@
 import { useState } from "react";
+import { loginAccount, registerAccount } from "../services/api.js";
 
-const MAX_USERNAME_LENGTH = 30;
-
-export default function Login({ onLogin }) {
-  const [name, setName] = useState("");
+export default function Login({ onAuth }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", username: "", email: "", identity: "", password: "" });
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const change = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const clean = name.trim();
-    if (!clean) {
-      setError("Please enter a username.");
-      return;
-    }
-    if (clean.length > MAX_USERNAME_LENGTH) {
-      setError(`Username must be at most ${MAX_USERNAME_LENGTH} characters.`);
-      return;
-    }
-    onLogin(clean);
-  };
+  async function submit(event) {
+    event.preventDefault(); setError(""); setBusy(true);
+    try {
+      const result = mode === "login"
+        ? await loginAccount({ identity: form.identity, password: form.password })
+        : await registerAccount({ name: form.name, username: form.username, email: form.email, password: form.password });
+      onAuth(result);
+    } catch (err) {
+      setError(err.response?.data?.error || "Unable to connect. Please try again.");
+    } finally { setBusy(false); }
+  }
 
-  return (
-    <div className="login-shell">
-      <div className="login-card">
-        <div className="login-logo" aria-hidden="true">
-          <svg
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
-          </svg>
-        </div>
-
-        <h1 className="login-title">PulseChat</h1>
-        <p className="login-sub">
-          Real-time chat. Join with any username — no password needed.
-        </p>
-
-        <form onSubmit={handleSubmit} noValidate>
-          <label className="login-label" htmlFor="username">
-            Username
-          </label>
-          <input
-            id="username"
-            className="login-input"
-            type="text"
-            placeholder="e.g. Meet"
-            value={name}
-            maxLength={MAX_USERNAME_LENGTH}
-            autoComplete="off"
-            autoFocus
-            onChange={(e) => {
-              setName(e.target.value);
-              if (error) setError("");
-            }}
-          />
-          {error && (
-            <p className="login-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" className="btn-primary login-btn">
-            Join chat
-          </button>
-        </form>
-
-        <p className="login-hint">
-          Tip: open a second window (or incognito) with a different name to see
-          live sync, typing and online users.
-        </p>
-      </div>
-    </div>
-  );
+  return <main className="auth-screen">
+    <section className="auth-card">
+      <div className="auth-brand"><span className="brand-symbol">ϟ</span><span>PulseChat</span></div>
+      <p className="eyebrow">YOUR SPACE. YOUR PEOPLE.</p>
+      <h1>{mode === "login" ? "Welcome back." : "Create your account."}</h1>
+      <p className="auth-sub">{mode === "login" ? "Sign in and pick up where you left off." : "Join conversations that move with you."}</p>
+      <form onSubmit={submit} className="auth-form">
+        {mode === "register" && <>
+          <label>Full name<input value={form.name} onChange={change("name")} minLength={2} maxLength={60} required placeholder="Your name" /></label>
+          <label>Username<input value={form.username} onChange={change("username")} minLength={3} maxLength={24} pattern="[A-Za-z0-9_]+" required placeholder="meetpatel" /></label>
+          <label>Email<input type="email" value={form.email} onChange={change("email")} required placeholder="you@example.com" /></label>
+        </>}
+        {mode === "login" && <label>Username or email<input value={form.identity} onChange={change("identity")} required autoComplete="username" placeholder="you@example.com" /></label>}
+        <label>Password<input type="password" value={form.password} onChange={change("password")} minLength={8} maxLength={128} required autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="At least 8 characters" /></label>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button className="auth-submit" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in →" : "Create account →"}</button>
+      </form>
+      <p className="auth-switch">{mode === "login" ? "New to PulseChat?" : "Already have an account?"} <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}> {mode === "login" ? "Create account" : "Sign in"}</button></p>
+      <p className="auth-foot">Private by design · Real-time by nature</p>
+    </section>
+  </main>;
 }

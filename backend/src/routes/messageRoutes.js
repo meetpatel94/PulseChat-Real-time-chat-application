@@ -1,16 +1,12 @@
 const express = require("express");
-const {
-  getMessages,
-  createMessage,
-  deleteMessage,
-  clearMessages,
-} = require("../controllers/messageController");
-
+const requireAuth = require("../middleware/requireAuth");
+const { createMessage, uploadAttachment, getAttachment, markRead, deleteMessage, clearHistory } = require("../controllers/messageController");
 const router = express.Router();
-
-router.get("/", getMessages);
-router.post("/", createMessage);
-router.delete("/", clearMessages);
-router.delete("/:id", deleteMessage);
-
+router.use(requireAuth);
+router.post("/:conversationId/attachment", express.raw({ type: "application/octet-stream", limit: "25mb" }), uploadAttachment);
+router.get("/:conversationId/attachments/:filename", getAttachment);
+router.post("/:conversationId", createMessage);
+router.post("/:conversationId/read", markRead);
+router.delete("/:messageId", deleteMessage);
+router.delete("/:conversationId/history", clearHistory);
 module.exports = router;

@@ -346,3 +346,101 @@ git push -u origin main
 - [ ] Online count updates on join/leave
 - [ ] Refresh preserves history
 - [ ] Screen recording of the two-user demo flow
+
+
+## Account authentication API (foundation)
+
+The `feat/auth-foundation` branch adds registration, login, current-user lookup and authenticated user search under `/api/auth`. Passwords are hashed with Node.js scrypt; JWTs expire after one hour. This API foundation is not yet wired into the current username-only frontend or Socket.IO message flow. The legacy global message endpoints remain a prototype and must not be exposed publicly until the next stage secures messages and sockets with authenticated user identity.
+
+Set `JWT_SECRET` in `backend/.env` to a cryptographically random value of at least 32 characters before using these routes.
+
+- `POST /api/auth/register` — body: `{ name, username, email, password }`
+- `POST /api/auth/login` — body: `{ identity, password }` (identity is username or email)
+- `GET /api/auth/me` — requires `Authorization: Bearer <token>`
+- `GET /api/auth/users?q=<query>` — requires bearer token; returns up to 20 matching users
+
+Example backend environment:
+
+```env
+PORT=5000
+MONGODB_URI=mongodb://127.0.0.1:27017/pulsechat
+CLIENT_URL=http://localhost:5173
+JWT_SECRET=replace-with-a-random-secret-at-least-32-characters
+```
+
+
+## PulseChat authenticated workspace (active development)
+
+The React/Vite client and Express/MongoDB backend are being consolidated around account-based access. The new workspace supports:
+- Account registration and sign-in with password hashing and expiring JWTs.
+- Authenticated Socket.IO handshakes; client-supplied usernames are not trusted.
+- Global chat, member-scoped direct conversations and group conversations.
+- Conversation history, room membership checks, group admin member additions and read markers.
+- Per-conversation background color preferences and a persistent light/dark appearance preference.
+- Responsive workspace layout and reduced-motion-aware UI animations.
+
+### Updated local setup
+
+1. In `backend/.env`, set `MONGODB_URI`, `CLIENT_URL`, and a cryptographically random `JWT_SECRET` of at least 32 characters.
+2. Run `npm install` in `backend/` to install Express, Mongoose, Socket.IO, dependency-free security headers and an in-memory authentication throttle.
+3. Start backend with `npm run dev`.
+4. Run `npm install` and `npm run dev` in `frontend/`.
+5. Register an account from the sign-in screen. Existing username-only localStorage sessions are not migrated; create an account.
+
+### Security and release status
+
+This is an in-progress foundation, not a security certification or production release. Before public deployment, complete automated integration tests, use HTTPS, review token storage/XSS exposure, add refresh-session rotation and revocation, email verification and password recovery, enforce production CORS/origin allowlists, add abuse controls and monitoring, and perform a security review. Never expose the MongoDB connection string or JWT secret in frontend variables.
+
+
+## Realtime workspace update (November 2026)
+
+The authenticated workspace now includes:
+- Authenticated Socket.IO conversation rooms for global, direct and group chats. Room access is verified against conversation membership before joining.
+- Fixed room-join validation so connected users can actually join authorized rooms and receive new messages without refreshing.
+- Sent, delivered and read receipt metadata. A single check means sent, grey double checks mean delivered to another active participant, and blue double checks mean read.
+- Live typing indicator with animated dots and an idle timeout.
+- Image/video attachments (JPG, PNG, GIF, WebP, MP4, WebM, MOV), up to 25 MB per file. Uploads are authenticated and attachment downloads re-check conversation membership.
+- Per-user message deletion, sender delete-for-everyone, group-admin moderation, and clear-history-for-me.
+- Message history filters messages hidden by the current user.
+
+### Media storage note
+
+For local development, uploaded files are written to `backend/uploads/` (git-ignored). This is not durable or horizontally scalable storage. Before production deployment, migrate uploads to private object storage (for example S3-compatible storage) with short-lived authorized download URLs, malware scanning, and retention controls.
+
+### Run and verify
+
+Run backend and frontend in separate terminals. Register two accounts in separate browser profiles and verify:
+1. Both accounts join the same global room and see messages instantly.
+2. A direct chat and a group chat both deliver messages without a page refresh.
+3. Typing dots appear and disappear after the sender stops typing.
+4. Sent messages show single check, delivered messages grey double check, and read messages blue double check.
+5. Images and videos upload and render only for authenticated conversation members.
+6. Delete for me affects only the current account; delete for everyone affects all room members; clear history affects only the current account.
+
+Automated end-to-end tests and production storage/security hardening remain required before release.
+
+
+## Group controls and privacy settings (November 2026)
+
+The current development branch also includes:
+- Group rename, admin promotion/demotion, member removal and leave-group controls.
+- A group with only one admin cannot be left until another member is promoted.
+- Group media gallery and in-loaded-history message search.
+- User-level read-receipt preference. When disabled, the server does not mark incoming messages as read.
+- Block/unblock controls, with private conversation creation and message delivery denied when either participant has blocked the other.
+- Responsive viewport sizing for reduced-height and mobile windows, theme-aware foreground text, and compact mobile settings access.
+
+### Privacy behavior
+Blocking is currently scoped to direct/private conversations. It does not remove users from shared groups or hide their messages in a group. Group membership and moderation remain controlled by group admins.
+
+
+## Media, replies and WhatsApp-inspired UI
+
+Latest development updates add:
+- Message replies with stored reply references and quoted context that remains visible after reloading history.
+- Per-attachment save/download controls and a full-screen viewer with reply and delete actions.
+- Group media gallery items open in the same viewer, with save and delete controls.
+- Supported attachments: JPG, PNG, GIF, WebP, MP4, WebM, MOV, PDF, MP3, M4A, OGG and WAV (25 MB maximum; signature-checked on upload).
+- Group member action menu for private messaging, admin promotion/demotion, nickname assignment and member removal.
+- Admin-managed group nicknames persisted on the conversation.
+- WhatsApp-inspired dark theme, rounded controls, and Settings moved to the bottom of the sidebar.

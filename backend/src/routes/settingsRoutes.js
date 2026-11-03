@@ -1,0 +1,11 @@
+const express = require("express");
+const requireAuth = require("../middleware/requireAuth");
+const { getSettings, updateSettings, blockUser, unblockUser, listBlockedUsers } = require("../controllers/settingsController");
+const router = express.Router();
+router.use(requireAuth);
+router.get("/", getSettings);
+router.patch("/", updateSettings);
+router.get("/blocked", listBlockedUsers);
+router.post("/blocked/:userId", blockUser);
+router.delete("/blocked/:userId", unblockUser);
+module.exports = router;

@@ -1,7 +1,7 @@
 {
   "name": "pulsechat-backend",
   "version": "1.0.0",
-  "description": "PulseChat real-time chat backend — Express + Socket.io + MongoDB",
+  "description": "PulseChat backend — Express, Socket.IO, MongoDB and JWT authentication foundation",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
