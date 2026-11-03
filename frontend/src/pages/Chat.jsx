@@ -476,7 +476,7 @@ export default function Chat({ user, token, onLogout }) {
                       <button onClick={() => startReply(m)}>↩ Reply</button>
                       {m.attachment && <button onClick={() => saveAttachment(m)}>↓ Save media</button>}
                       <button onClick={() => handleDelete(m, "me")}>Delete for me</button>
-                      {own && <button className="danger-action" onClick={() => handleDelete(m, "everyone")}>Delete for everyone</button>}
+                      {(own || (active?.type === "group" && isAdmin)) && <button className="danger-action" onClick={() => handleDelete(m, "everyone")}>Delete for everyone</button>}
                     </div>}
                   </div>}
                 </div>
@@ -490,7 +490,7 @@ export default function Chat({ user, token, onLogout }) {
       <form className="composer" onSubmit={sendMessage}>
         {replyTo && <div className="reply-composer-preview"><span><b>Replying to {replyTo.sender?.name || "message"}</b><small>{replyTo.text || replyTo.attachment?.name || "Media attachment"}</small></span><button type="button" onClick={() => setReplyTo(null)}>×</button></div>}
         <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/webm" onChange={handleFile}/>
-        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo or video">{uploading ? "…" : "＋"}</button>
+        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo, video, audio or document">{uploading ? "…" : "＋"}</button>
         <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
         <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online}>↑</button>
       </form>
