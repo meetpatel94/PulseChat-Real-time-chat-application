@@ -54,6 +54,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
 
   const activeId = active?._id || active?.id;
   const isAdmin = active?.admins?.some((a) => String(a._id || a) === user.id);
+  const canSend = !(active?.type === "group" && active.onlyAdminsCanMessage && !isAdmin);
   const isOnlyAdmin = isAdmin && (active?.admins?.length || 0) === 1;
   const title = active?.type === "global" ? "Global Lounge" : active?.type === "group" ? active.title : active?.participants?.find((p) => String(p._id || p.id) !== user.id)?.name || "Private chat";
 
