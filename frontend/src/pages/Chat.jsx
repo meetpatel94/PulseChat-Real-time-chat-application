@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  addGroupMembers, createConversation, getConversationMessages, getConversations,
-  getGlobalConversation, markConversationRead, searchUsers,
+  addGroupMembers, clearConversationHistory, createConversation, deleteMessage as deleteMessageApi,
+  getAttachmentBlob, getConversationMessages, getConversations, getGlobalConversation,
+  markConversationRead, searchUsers, uploadAttachment,
 } from "../services/api.js";
 import { connectSocket, disconnectSocket, getSocket } from "../services/socket.js";
 
 const THEMES = ["#e8f2ee", "#f1e8f6", "#f8eee2", "#e8eef8", "#f7e8eb", "#e9edf0"];
 const THEME_KEY = "pulsechat_chat_themes";
 const MODE_KEY = "pulsechat_mode";
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const ACCEPTED_MEDIA = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
 
 export default function Chat({ user, token, onLogout }) {
   const [conversations, setConversations] = useState([]);
@@ -22,10 +25,16 @@ export default function Chat({ user, token, onLogout }) {
   const [groupName, setGroupName] = useState("");
   const [dialog, setDialog] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [online, setOnline] = useState(true);
+  const [online, setOnline] = useState(false);
   const [typing, setTyping] = useState({});
   const [showPalette, setShowPalette] = useState(false);
+  const [menuMessageId, setMenuMessageId] = useState(null);
+  const [mediaUrls, setMediaUrls] = useState({});
+  const typingTimer = useRef(null);
+  const typingActive = useRef(false);
+  const fileInput = useRef(null);
 
   const activeId = active?._id || active?.id;
   const isAdmin = active?.admins?.some((a) => String(a._id || a) === user.id);
@@ -50,7 +59,14 @@ export default function Chat({ user, token, onLogout }) {
       if (!event?.conversationId) return;
       setTyping((prev) => ({ ...prev, [event.conversationId]: event.typing ? event.username : null }));
     });
-    return () => { mounted = false; disconnectSocket(); };
+    socket.on("history:cleared", ({ conversationId } = {}) => {
+      if (String(conversationId) === String(activeId)) setMessages([]);
+    });
+    return () => {
+      mounted = false;
+      clearTimeout(typingTimer.current);
+      disconnectSocket();
+    };
   }, [token, refreshConversations]);
 
   useEffect(() => {
@@ -58,16 +74,17 @@ export default function Chat({ user, token, onLogout }) {
     let mounted = true;
     setMessages([]);
     setError("");
-    getConversationMessages(activeId)
-      .then((rows) => { if (mounted) setMessages(rows); })
-      .catch((err) => mounted && setError(err.response?.data?.error || "Could not load messages."));
     const socket = getSocket();
     const joinRoom = () => socket?.emit("conversation:join", { conversationId: activeId }, (result) => {
       if (!result?.success && mounted) setError(result?.error || "Could not join this chat.");
     });
     if (socket?.connected) joinRoom();
     socket?.on("connect", joinRoom);
-    if (active.type !== "global") markConversationRead(activeId).catch(() => {});
+    getConversationMessages(activeId)
+      .then((rows) => { if (mounted) setMessages(rows); })
+      .catch((err) => mounted && setError(err.response?.data?.error || "Could not load messages."));
+    // Global rooms also need read receipts; the server authorizes global membership separately.
+    markConversationRead(activeId).catch(() => {});
     return () => { mounted = false; socket?.off("connect", joinRoom); };
   }, [activeId, active?.type]);
 
@@ -75,10 +92,10 @@ export default function Chat({ user, token, onLogout }) {
     const socket = getSocket();
     if (!socket) return;
     const receive = (message) => {
-      const id = String(message.conversation);
-      if (id === String(activeId)) {
-        setMessages((prev) => prev.some((m) => m._id === message._id) ? prev : [...prev, message]);
-        if (String(message.sender?._id) !== user.id) markConversationRead(activeId).catch(() => {});
+      const conversationId = String(message.conversation?._id || message.conversation);
+      if (conversationId === String(activeId)) {
+        setMessages((prev) => prev.some((m) => String(m._id) === String(message._id)) ? prev : [...prev, message]);
+        if (String(message.sender?._id || message.sender) !== user.id) markConversationRead(activeId).catch(() => {});
       }
       refreshConversations().catch(() => {});
     };
@@ -88,11 +105,44 @@ export default function Chat({ user, token, onLogout }) {
         ...message,
         readBy: readerId && !message.readBy?.some((id) => String(id._id || id) === String(readerId))
           ? [...(message.readBy || []), readerId] : message.readBy,
+        deliveredTo: readerId && !message.deliveredTo?.some((id) => String(id._id || id) === String(readerId))
+          ? [...(message.deliveredTo || []), readerId] : message.deliveredTo,
       })));
+    };
+    const onDelivered = ({ conversationId, userId: recipientId, recipientIds = [] } = {}) => {
+      if (String(conversationId) !== String(activeId)) return;
+      const ids = recipientIds.length ? recipientIds : recipientId ? [recipientId] : [];
+      setMessages((prev) => prev.map((message) => {
+        if (String(message.sender?._id || message.sender) !== user.id) return message;
+        const current = message.deliveredTo || [];
+        return { ...message, deliveredTo: [...current, ...ids.filter((id) => !current.some((old) => String(old._id || old) === String(id)))] };
+      }));
+    };
+    const onDeleted = ({ messageId, conversationId } = {}) => {
+      if (String(conversationId) !== String(activeId)) return;
+      setMessages((prev) => prev.map((m) => String(m._id) === String(messageId)
+        ? { ...m, deletedForEveryone: true, text: "", attachment: null } : m));
+    };
+    const onHidden = ({ messageId, conversationId } = {}) => {
+      if (String(conversationId) === String(activeId)) setMessages((prev) => prev.filter((m) => String(m._id) !== String(messageId)));
+    };
+    const onHistoryCleared = ({ conversationId } = {}) => {
+      if (String(conversationId) === String(activeId)) setMessages([]);
     };
     socket.on("message:new", receive);
     socket.on("messages:read", onRead);
-    return () => { socket.off("message:new", receive); socket.off("messages:read", onRead); };
+    socket.on("messages:delivered", onDelivered);
+    socket.on("message:deleted", onDeleted);
+    socket.on("message:hidden", onHidden);
+    socket.on("history:cleared", onHistoryCleared);
+    return () => {
+      socket.off("message:new", receive);
+      socket.off("messages:read", onRead);
+      socket.off("messages:delivered", onDelivered);
+      socket.off("message:deleted", onDeleted);
+      socket.off("message:hidden", onHidden);
+      socket.off("history:cleared", onHistoryCleared);
+    };
   }, [activeId, refreshConversations, user.id]);
 
   useEffect(() => {
@@ -100,6 +150,20 @@ export default function Chat({ user, token, onLogout }) {
     const timer = setTimeout(() => searchUsers(query).then(setUsers).catch(() => setUsers([])), 250);
     return () => clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    let alive = true;
+    const urls = {};
+    const attachments = messages.filter((m) => m.attachment?.url && !m.deletedForEveryone);
+    Promise.all(attachments.map(async (message) => {
+      const filename = message.attachment.url.split("/").pop();
+      try {
+        const blob = await getAttachmentBlob(String(message.conversation?._id || message.conversation), filename);
+        if (alive) urls[message._id] = URL.createObjectURL(blob);
+      } catch { /* Keep the message metadata visible if media cannot be fetched. */ }
+    })).then(() => { if (alive) setMediaUrls((prev) => ({ ...prev, ...urls })); });
+    return () => { alive = false; Object.values(urls).forEach(URL.revokeObjectURL); };
+  }, [messages]);
 
   const toggleMode = () => setMode((old) => { const next = old === "dark" ? "light" : "dark"; localStorage.setItem(MODE_KEY, next); return next; });
   const setChatTheme = (color) => {
@@ -138,6 +202,25 @@ export default function Chat({ user, token, onLogout }) {
     finally { setBusy(false); }
   }
 
+  function stopTyping() {
+    clearTimeout(typingTimer.current);
+    if (typingActive.current && activeId) getSocket()?.emit("typing:stop", { conversationId: activeId });
+    typingActive.current = false;
+  }
+
+  function handleTyping(value) {
+    setText(value);
+    const socket = getSocket();
+    if (!socket || !activeId) return;
+    if (value.trim() && !typingActive.current) {
+      socket.emit("typing:start", { conversationId: activeId });
+      typingActive.current = true;
+    }
+    clearTimeout(typingTimer.current);
+    if (value.trim()) typingTimer.current = setTimeout(stopTyping, 900);
+    else stopTyping();
+  }
+
   function sendMessage(event) {
     event.preventDefault();
     const clean = text.trim();
@@ -146,9 +229,43 @@ export default function Chat({ user, token, onLogout }) {
     if (!socket?.connected) { setError("Realtime connection is offline. Reconnect before sending."); return; }
     socket.emit("message:send", { conversationId: activeId, text: clean }, (result) => {
       if (!result?.success) setError(result?.error || "Message could not be sent.");
+      else setMessages((prev) => prev.some((m) => String(m._id) === String(result.message?._id)) ? prev : [...prev, result.message]);
     });
     setText("");
-    socket.emit("typing:stop", { conversationId: activeId });
+    stopTyping();
+  }
+
+  async function handleFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !activeId) return;
+    if (!ACCEPTED_MEDIA.includes(file.type)) { setError("Choose a supported image or video file."); return; }
+    if (file.size > MAX_FILE_SIZE) { setError("File must be 25 MB or smaller."); return; }
+    setUploading(true); setError("");
+    try {
+      await uploadAttachment(activeId, file);
+    } catch (err) {
+      setError(err.response?.data?.error || "Media upload failed. Please try again.");
+    } finally { setUploading(false); }
+  }
+
+  async function handleDelete(message, scope) {
+    const prompt = scope === "everyone" ? "Delete this message for everyone? This cannot be undone." : "Delete this message only for you?";
+    if (!window.confirm(prompt)) return;
+    try {
+      await deleteMessageApi(message._id, scope);
+      if (scope === "me") setMessages((prev) => prev.filter((m) => String(m._id) !== String(message._id)));
+      else setMessages((prev) => prev.map((m) => String(m._id) === String(message._id) ? { ...m, deletedForEveryone: true, text: "", attachment: null } : m));
+      setMenuMessageId(null);
+    } catch (err) { setError(err.response?.data?.error || "Could not delete message."); }
+  }
+
+  async function handleClearHistory() {
+    if (!activeId || !window.confirm("Clear this conversation from your history? Other members will still see their messages.")) return;
+    try {
+      await clearConversationHistory(activeId);
+      setMessages([]);
+    } catch (err) { setError(err.response?.data?.error || "Could not clear chat history."); }
   }
 
   const grouped = useMemo(() => ({
@@ -190,6 +307,7 @@ export default function Chat({ user, token, onLogout }) {
         <div className="room-icon">{active?.type === "group" ? "✣" : active?.type === "global" ? "◎" : "◉"}</div>
         <div className="room-heading"><h1>{title}</h1><p>{active?.type === "global" ? "A shared room for the whole community" : active?.type === "group" ? `${active.participants?.length || 0} members · Group conversation` : "Only conversation members can access this chat"}</p></div>
         <div className="room-tools">
+          <button className="icon-button" onClick={handleClearHistory} title="Clear my chat history">⌫</button>
           {active?.type === "group" && isAdmin && <button className="icon-button" onClick={() => setDialog("members")} title="Add group members">＋</button>}
           <button className="icon-button" onClick={() => setShowPalette((v) => !v)} title="Customize chat background">◐</button>
           <span className={online ? "live-pill" : "offline-pill"}>{online ? "LIVE" : "OFFLINE"}</span>
@@ -202,21 +320,45 @@ export default function Chat({ user, token, onLogout }) {
           {messages.length === 0 && <div className="empty-room"><div>✧</div><h2>Make the first move.</h2><p>Start the conversation. Good things begin with hello.</p></div>}
           {messages.map((m) => {
             const own = String(m.sender?._id || m.sender) === user.id;
+            const delivered = (m.deliveredTo || []).length > 0;
+            const seen = (m.readBy || []).some((id) => String(id._id || id) !== user.id);
+            const filename = m.attachment?.name || "Attachment";
             return <article key={m._id} className={`message-line ${own ? "mine" : ""}`}>
               {!own && <span className="message-avatar">{m.sender?.name?.[0]?.toUpperCase() || "U"}</span>}
-              <div className="message-content">{!own && <span className="message-sender">{m.sender?.name || m.sender?.username}</span>}
-                <div className="message-bubble">{m.text}</div>
-                <time>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{own && m.readBy?.length > 1 ? " · Seen" : ""}</time>
+              <div className="message-content">
+                {!own && <span className="message-sender">{m.sender?.name || m.sender?.username}</span>}
+                <div className="message-bubble">
+                  {m.deletedForEveryone ? <i className="deleted-message">This message was deleted</i> : <>
+                    {m.text && <p>{m.text}</p>}
+                    {m.attachment && mediaUrls[m._id] && (m.attachment.mimeType.startsWith("image/")
+                      ? <img className="chat-image" src={mediaUrls[m._id]} alt={filename} />
+                      : <video className="chat-video" src={mediaUrls[m._id]} controls preload="metadata" />)}
+                    {m.attachment && <small className="attachment-name">{filename}</small>}
+                  </>}
+                </div>
+                <div className="message-meta-row">
+                  <time>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                  {own && !m.deletedForEveryone && <span className={`receipt ${seen ? "receipt-seen" : delivered ? "receipt-delivered" : ""}`} title={seen ? "Seen" : delivered ? "Delivered" : "Sent"}>{delivered || seen ? "✓✓" : "✓"}</span>}
+                  {!m.deletedForEveryone && <div className="message-actions">
+                    <button className="message-menu-trigger" onClick={() => setMenuMessageId(menuMessageId === m._id ? null : m._id)} aria-label="Message options">⋯</button>
+                    {menuMessageId === m._id && <div className="message-menu">
+                      <button onClick={() => handleDelete(m, "me")}>Delete for me</button>
+                      {own && <button className="danger-action" onClick={() => handleDelete(m, "everyone")}>Delete for everyone</button>}
+                    </div>}
+                  </div>}
+                </div>
               </div>
             </article>;
           })}
-          {typing[activeId] && <div className="typing-note">{typing[activeId]} is typing…</div>}
+          {typing[activeId] && <div className="typing-note"><span>{typing[activeId]} is typing</span><span className="typing-dots"><i/><i/><i/></span></div>}
         </div>
       </div>
       {error && <div className="room-error" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
       <form className="composer" onSubmit={sendMessage}>
-        <input value={text} onChange={(e) => { setText(e.target.value); const socket=getSocket(); if(socket && activeId) { socket.emit("typing:start",{conversationId:activeId}); } }} onBlur={() => { const socket=getSocket(); if(socket && activeId) socket.emit("typing:stop",{conversationId:activeId}); }} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
-        <span className="composer-hint">Enter to send</span><button disabled={!text.trim() || !online}>↑</button>
+        <input ref={fileInput} className="media-file-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime" onChange={handleFile}/>
+        <button type="button" className="attach-button" onClick={() => fileInput.current?.click()} disabled={uploading || !online} title="Attach photo or video">{uploading ? "…" : "＋"}</button>
+        <input value={text} onChange={(e) => handleTyping(e.target.value)} onBlur={stopTyping} placeholder={active?.type === "global" ? "Share something with everyone…" : "Write a message…"} maxLength={4000} aria-label="Write a message"/>
+        <span className="composer-hint">Enter to send</span><button type="submit" disabled={!text.trim() || !online}>↑</button>
       </form>
     </section>
 
