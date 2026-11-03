@@ -17,7 +17,7 @@ function initializeSocket(io) {
     socket.on("conversation:join", async ({ conversationId } = {}, ack = () => {}) => {
       try {
         const conversation = await Conversation.findById(conversationId).select("type participants");
-        if (!conversation || !isParticipant(conversation, userId))
+        if (!conversation || !isParticipant(conversation, userId) || !socket.rooms.has(`conversation:${conversationId}`))
           return ack({ success: false, error: "Conversation not found" });
         socket.join(`conversation:${conversationId}`);
         return ack({ success: true });
