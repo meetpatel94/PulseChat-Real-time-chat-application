@@ -45,7 +45,7 @@ function initializeSocket(io) {
 
     socket.on("message:send", async (payload = {}, ack = () => {}) => {
       try {
-        const { conversationId } = payload;
+        const { conversationId, replyToMessageId } = payload;
         const text = typeof payload.text === "string" ? payload.text.trim() : "";
         if (!text || text.length > MAX_MESSAGE_LENGTH)
           return ack({ success: false, error: "Message must contain 1–4000 characters" });
@@ -61,13 +61,21 @@ function initializeSocket(io) {
           const recipient = io.sockets.sockets.get(socketId);
           if (recipient?.user?.id && recipient.user.id !== userId) deliveredTo.add(recipient.user.id);
         }
+        let replyTo = null;
+        if (replyToMessageId) {
+          if (!require("mongoose").isValidObjectId(replyToMessageId)) return ack({ success: false, error: "Invalid reply target" });
+          replyTo = await Message.findOne({ _id: replyToMessageId, conversation: conversation._id, deletedForEveryone: false });
+          if (!replyTo) return ack({ success: false, error: "The message being replied to is no longer available" });
+        }
         const message = await Message.create({
           conversation: conversation._id, sender: userId, text, readBy: [userId], deliveredTo: [...deliveredTo],
+          replyTo: replyTo?._id || null,
         });
         conversation.lastMessageAt = message.createdAt;
         await conversation.save();
         const populated = await Message.findById(message._id)
-          .populate("sender", "name username avatarUrl").lean();
+          .populate("sender", "name username avatarUrl")
+          .populate({ path: "replyTo", select: "text attachment sender deletedForEveryone createdAt", populate: { path: "sender", select: "name username" } }).lean();
         io.to(room).emit("message:new", populated);
         if (deliveredTo.size) io.to(room).emit("messages:delivered", { conversationId, userId: null, recipientIds: [...deliveredTo] });
         return ack({ success: true, message: populated });
