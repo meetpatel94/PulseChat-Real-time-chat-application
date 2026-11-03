@@ -88,4 +88,22 @@ async function addMembers(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { listConversations, createConversation, getMessages, addMembers };
+
+async function getGlobalConversation(req, res, next) {
+  try {
+    let conversation = await Conversation.findOne({ type: "global" });
+    if (!conversation) {
+      try {
+        conversation = await Conversation.create({
+          type: "global", title: "Global Chat", participants: [req.auth.userId], createdBy: req.auth.userId,
+        });
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+        conversation = await Conversation.findOne({ type: "global" });
+      }
+    }
+    res.json({ success: true, conversation });
+  } catch (err) { next(err); }
+}
+
+module.exports = { listConversations, createConversation, getMessages, addMembers, getGlobalConversation };
