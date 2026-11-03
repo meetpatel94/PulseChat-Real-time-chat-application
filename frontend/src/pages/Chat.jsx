@@ -95,7 +95,8 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
   const isAdmin = active?.admins?.some((a) => String(a._id || a) === user.id);
   const canSend = !(active?.type === "group" && active.onlyAdminsCanMessage && !isAdmin);
   const isOnlyAdmin = isAdmin && (active?.admins?.length || 0) === 1;
-  const title = active?.type === "global" ? "Global Lounge" : active?.type === "group" ? active.title : active?.participants?.find((p) => String(p._id || p.id) !== user.id)?.name || "Private chat";
+  const contact = active?.type === "direct" ? active?.participants?.find((p) => String(p._id || p.id) !== user.id) : null;
+  const title = active?.type === "global" ? "Global Lounge" : active?.type === "group" ? active.title : contact?.name || "Private chat";
 
   const refreshConversations = useCallback(async () => {
     const [global, rows] = await Promise.all([getGlobalConversation(), getConversations()]);
@@ -748,6 +749,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
         <footer><button onClick={() => saveAttachment(selectedMedia)}>↓ Save media</button><button onClick={() => startReply(selectedMedia)}>↩ Reply</button><button className="danger-action" onClick={() => handleDelete(selectedMedia, "me")}>Delete for me</button>{(String(selectedMedia.sender?._id || selectedMedia.sender) === user.id || (active?.type === "group" && isAdmin)) && <button className="danger-action" onClick={() => handleDelete(selectedMedia, "everyone")}>Delete for everyone</button>}</footer>
       </section>
     </div>}
+    {contactOpen && contact && <div className="modal-backdrop" onClick={()=>setContactOpen(false)}><section className="people-modal contact-profile-modal" onClick={(e)=>e.stopPropagation()}><button className="modal-close" onClick={()=>setContactOpen(false)}>×</button><div className="contact-profile-photo">{contact.avatarUrl?<img src={contact.avatarUrl} alt={contact.name}/>:<span>{contact.name?.[0]?.toUpperCase()||"U"}</span>}</div><h2>{contact.name}</h2><p className="contact-profile-username">@{contact.username}</p><div className="contact-profile-bio"><b>About</b><p>{contact.bio || "This user has not added a bio yet."}</p></div><div className="contact-profile-details"><span><b>Name</b>{contact.name}</span><span><b>Username</b>@{contact.username}</span><span><b>Bio</b>{contact.bio || "Not provided"}</span></div><button className="modal-submit" onClick={()=>setContactOpen(false)}>Close</button></section></div>}
     {profileOpen && <div className="modal-backdrop profile-modal-backdrop" onClick={() => setProfileOpen(false)}>
       <section className="people-modal profile-modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={() => setProfileOpen(false)}>×</button>
@@ -770,6 +772,7 @@ export default function Chat({ user, token, onUserUpdate, onLogout }) {
     </div>}
     {dialog === "settings" && <div className="modal-backdrop" onClick={() => setDialog("")}><section className="people-modal settings-modal" onClick={(e) => e.stopPropagation()}>
       <button className="modal-close" onClick={() => setDialog("")}>×</button><span className="eyebrow">PULSECHAT PREFERENCES</span><h2>Settings & privacy</h2>
+      <div className="setting-row zoom-setting"><span><b>App display size</b><small>Adjust the size of the whole interface · {uiScale}%</small></span><div className="zoom-controls"><button onClick={()=>setUiScale((v)=>{const n=Math.max(80,v-5);localStorage.setItem("pulsechat_ui_scale",String(n));return n;})} aria-label="Zoom out">−</button><input type="range" min="80" max="120" step="5" value={uiScale} onChange={(e)=>{const n=Number(e.target.value);setUiScale(n);localStorage.setItem("pulsechat_ui_scale",String(n));}}/><button onClick={()=>setUiScale((v)=>{const n=Math.min(120,v+5);localStorage.setItem("pulsechat_ui_scale",String(n));return n;})} aria-label="Zoom in">＋</button><button onClick={()=>{setUiScale(100);localStorage.setItem("pulsechat_ui_scale","100");}}>Reset</button></div></div>
       <div className="setting-row"><span><b>Read receipts</b><small>Allow others to know when you have read their messages.</small></span><input type="checkbox" checked={settings.readReceiptsEnabled} onChange={(e) => toggleReadReceipts(e.target.checked)}/></div>
       <h3>Blocked accounts</h3><input className="modal-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search someone to block…"/>
       <div className="people-results">{users.map((person) => <div className="person-result" key={person.id}><span className="conversation-avatar">{person.name?.[0]?.toUpperCase()}</span><span><b>{person.name}</b><small>@{person.username}</small></span><button className="person-check" onClick={() => handleBlock(person.id)}>Block</button></div>)}</div>
